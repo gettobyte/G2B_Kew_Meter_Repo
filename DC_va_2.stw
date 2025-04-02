@@ -1,0 +1,12 @@
+;	STMicroelectronics Workspace file
+
+[Version]
+Keyword=ST7Workspace-V0.7
+
+[Project0]
+Filename=dc-va-2.stp
+Dependencies=
+
+[Project1]
+Filename=dc_va_3.stp
+Dependencies=
