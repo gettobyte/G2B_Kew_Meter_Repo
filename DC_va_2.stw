@@ -10,3 +10,7 @@ Dependencies=
 [Project1]
 Filename=dc_va_3.stp
 Dependencies=
+[Options]
+ActiveProject=dc_va_3
+ActiveConfig=Debug
+AddSortedElements=0

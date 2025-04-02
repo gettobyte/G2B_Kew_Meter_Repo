@@ -1211,7 +1211,7 @@ ptn_Child2=ChildFrames
 
 [WorkState_v1_2.Frames.MainFrame]
 WindowPlacement=MCAAAAAACAAAAAAADAAAAAAAPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPCKKPPPPPIPPPPPPPIAAAAAAAIADAAAAA
-Title=ST Visual Develop - DC_va_2.stw* - [main.c]
+Title=ST Visual Develop - DC_va_2.stw - [main.c]
 
 [WorkState_v1_2.Frames.ChildFrames]
 ptn_Child1=Document-0
