@@ -6,16 +6,20 @@
 #include "stm8s.h"
 
 volatile uint8_t currentDigit = 0;
-uint8_t digits[3] = {0, 0, 0};
+uint8_t digits[6] = {0, 0, 0, 0, 0, 0};
 static uint16_t counter;
 uint8_t pattern;
-int i;
+uint32_t adc1_value, millivolt1, adc2_value, millivolt2;
+uint32_t sum = 0;
+uint8_t i, samples;
+uint16_t voltage, current;
 
 // Segment Pins
 #define PortA GPIOA
-#define PortC GPIOC
 #define PinA GPIO_PIN_1
 #define PinB GPIO_PIN_2
+
+#define PortC GPIOC
 #define PinC GPIO_PIN_4
 #define PinD GPIO_PIN_6
 #define PinE GPIO_PIN_7
@@ -27,6 +31,10 @@ int i;
 #define Digit1 (GPIO_PIN_4)
 #define Digit2 (GPIO_PIN_6)
 #define Digit3 (GPIO_PIN_5)
+#define PortB GPIOB
+#define Digit4 (GPIO_PIN_4)
+#define Digit5 (GPIO_PIN_5)
+#define Digit6 (GPIO_PIN_3)
 
 // Segment Mapping
 const uint8_t Segment_Patterns[10] = {
@@ -44,7 +52,8 @@ const uint8_t Segment_Patterns[10] = {
 
 #define PORTD_GPIO_PINS  (Digit1 | Digit2 | Digit3)
 #define PORTC_GPIO_PINS  (PinC | PinD | PinE | PinF |PinG)
-#define PORTA_GPIO_PINS	 (PinA | PinB | GPIO_PIN_3)
+#define PORTA_GPIO_PINS	 (PinA | PinB | Digit6)
+#define PORTB_GPIO_PINS	 (Digit4 | Digit5)
 
 void Delay_us(uint16_t nCount);
 void clearDigits(void);
@@ -52,28 +61,40 @@ void displayDigit(uint8_t digit, uint8_t value);
 void GPIO_Int(void);
 void CLK_Init(void);
 void Timer4_Init(void);
+void ADC1_setup(void);
+uint32_t ADC1_Read(void);
+uint32_t ADC2_Read(void);
+uint16_t readAverageADC1(uint8_t samples);
+uint16_t readAverageADC2(uint8_t samples);
 
 main()
 {
 	CLK_Init();
 	GPIO_Int();
 	Timer4_Init();  // Start Timer4 for display refresh
+	ADC1_setup();
 	counter = 0;  // Start from 0
 	
 	while (1)
 	{
+		voltage = readAverageADC1(8);
+		millivolt1 = (voltage * 1600) / 1000;
+		sum = 0;
+		current = readAverageADC2(8);
+		millivolt2 = (current * 100000) / 241;
+		sum = 0;
 		// Convert counter to individual digits
-		digits[0] = ((counter / 100) % 10);  // Hundreds
-		digits[1] = (counter / 10) % 10;   // Tens
-		digits[2] = counter % 10;          // Ones
-	
-		//digits[0] = 1;
-		//digits[1] = 2;
-		//digits[2] = 3;
-		// Increment counter
-		Delay_us(50000); // Add delay before increasing counter
-		counter++;
-		if (counter > 999) counter = 0;
+		digits[0] = ((millivolt1 / 100) % 10);  // Voltage hundreds
+		digits[1] = ((millivolt1 / 10) % 10);   // Voltage tens
+		digits[2] = (millivolt1 % 10);          // Voltage ones
+		
+		digits[3] = ((millivolt2 / 100) % 10);  // Current hundreds
+		digits[4] = ((millivolt2 / 10) % 10);   // Current tens
+		digits[5] = (millivolt2 % 10);          // Current ones
+		
+		
+		
+		Delay_us(1000000);
 	}
 }
 
@@ -90,44 +111,126 @@ void GPIO_Int(void) {
 	GPIO_DeInit(GPIOD);
 	GPIO_DeInit(GPIOC);
 	GPIO_DeInit(GPIOA);
+	GPIO_DeInit(GPIOB);
 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)PORTD_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_2, GPIO_MODE_IN_FL_NO_IT);
+	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_3, GPIO_MODE_IN_FL_NO_IT);
 	GPIO_Init(GPIOC, (GPIO_Pin_TypeDef)PORTC_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
 	GPIO_Init(GPIOA, (GPIO_Pin_TypeDef)PORTA_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+	GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)PORTB_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
 }
 
 // Clock Initialization
 void CLK_Init(void) {
- CLK_DeInit();
+	CLK_DeInit();
 						
- CLK_HSECmd(DISABLE);
- CLK_LSICmd(DISABLE);
- CLK_HSICmd(ENABLE);
- while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);
+	CLK_HSECmd(DISABLE);
+	CLK_LSICmd(DISABLE);
+	CLK_HSICmd(ENABLE);
+	while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);
 						
- CLK_ClockSwitchCmd(ENABLE);
- CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV4);
- CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);
+	CLK_ClockSwitchCmd(ENABLE);
+	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV4);
+	CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);
 						
- CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI, 
- DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
+	CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI,
+	DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
 						
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, ENABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, DISABLE);
- CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);;
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, ENABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, DISABLE);
+	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);;
 }
 
 // Timer4 Initialization for ~5ms Interrupt
 void Timer4_Init(void) {
-	 TIM4_DeInit();
-	 TIM4_TimeBaseInit(TIM4_PRESCALER_64, 156);      
-	 TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
-	 TIM4_Cmd(ENABLE);
-	 
-	 enableInterrupts();
+	TIM4_DeInit();
+	TIM4_TimeBaseInit(TIM4_PRESCALER_64, 156);      
+	TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
+	TIM4_Cmd(ENABLE);
+	
+	enableInterrupts();
 }
 
+void ADC1_setup(void)
+{
+  ADC1_DeInit();         
+                
+	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
+						ADC1_CHANNEL_3,
+						ADC1_PRESSEL_FCPU_D18, 
+						ADC1_EXTTRIG_TIM, 
+						DISABLE, 
+						ADC1_ALIGN_RIGHT, 
+						ADC1_SCHMITTTRIG_CHANNEL3, 
+						DISABLE);
+						 
+	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
+						ADC1_CHANNEL_4,
+						ADC1_PRESSEL_FCPU_D18, 
+						ADC1_EXTTRIG_TIM, 
+						DISABLE, 
+						ADC1_ALIGN_RIGHT, 
+						ADC1_SCHMITTTRIG_CHANNEL4, 
+						DISABLE);
+						
+	ADC1_ConversionConfig(ADC1_CONVERSIONMODE_CONTINUOUS,
+												((ADC1_Channel_TypeDef)(ADC1_CHANNEL_3 | ADC1_CHANNEL_4)),
+												ADC1_ALIGN_RIGHT);
+												
+	ADC1_DataBufferCmd(ENABLE);
+	
+	ADC1_Cmd(ENABLE);
+}
+
+uint32_t ADC1_Read(void)
+{
+	ADC1_ScanModeCmd(ENABLE);
+	
+	ADC1_StartConversion();
+	
+	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
+
+	adc1_value = ADC1_GetBufferValue(3);
+	
+	ADC1_ClearFlag(ADC1_FLAG_EOC);
+	
+	return adc1_value;
+}
+
+uint32_t ADC2_Read(void)
+{
+	ADC1_ScanModeCmd(ENABLE);
+	
+	ADC1_StartConversion();
+	
+	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
+
+	adc2_value = ADC1_GetBufferValue(4);
+	
+	ADC1_ClearFlag(ADC1_FLAG_EOC);
+	
+	return adc2_value;
+}
+
+uint16_t readAverageADC1(uint8_t samples) {
+    
+	for (i = 0; i < samples; i++) {
+			sum += ADC1_Read();
+			Delay_us(200);  // small delay between samples
+	}
+	return sum / samples;
+}
+
+uint16_t readAverageADC2(uint8_t samples) {
+    
+	for (i = 0; i < samples; i++) {
+			sum += ADC2_Read();
+			Delay_us(200);  // small delay between samples
+	}
+	return sum / samples;
+}
