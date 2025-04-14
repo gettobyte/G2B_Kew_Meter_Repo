@@ -9,10 +9,12 @@ volatile uint8_t currentDigit = 0;
 uint8_t digits[6] = {0, 0, 0, 0, 0, 0};
 static uint16_t counter;
 uint8_t pattern;
-uint32_t adc1_value, millivolt1, adc2_value, millivolt2;
+uint32_t millivolt1, millivolt2;
 uint32_t sum = 0;
 uint8_t i, samples;
-uint16_t voltage, current;
+uint32_t voltage, current;
+uint32_t adc1_value;
+uint32_t adc2_value;
 
 // Segment Pins
 #define PortA GPIOA
@@ -72,16 +74,14 @@ main()
 	CLK_Init();
 	GPIO_Int();
 	Timer4_Init();  // Start Timer4 for display refresh
-	ADC1_setup();
-	counter = 0;  // Start from 0
 	
 	while (1)
 	{
-		voltage = readAverageADC1(8);
-		millivolt1 = (voltage * 1600) / 1000;
+		voltage = readAverageADC1(64);
+		millivolt1 = (voltage * 230L) / 140;
 		sum = 0;
-		current = readAverageADC2(8);
-		millivolt2 = (current * 100000) / 241;
+		current = readAverageADC2(32);
+		millivolt2 = (current * 1000) / 170;
 		sum = 0;
 		// Convert counter to individual digits
 		digits[0] = ((millivolt1 / 100) % 10);  // Voltage hundreds
@@ -93,8 +93,7 @@ main()
 		digits[5] = (millivolt2 % 10);          // Current ones
 		
 		
-		
-		Delay_us(1000000);
+		Delay_us(100000000);
 	}
 }
 
@@ -189,13 +188,24 @@ void ADC1_setup(void)
 
 uint32_t ADC1_Read(void)
 {
-	ADC1_ScanModeCmd(ENABLE);
+	ADC1_DeInit();
+	
+	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS,
+						 ADC1_CHANNEL_3,
+						 ADC1_PRESSEL_FCPU_D18,
+						 ADC1_EXTTRIG_TIM,
+						 DISABLE,
+						 ADC1_ALIGN_RIGHT,
+						 ADC1_SCHMITTTRIG_CHANNEL3,
+						 DISABLE);
+						 
+	ADC1_Cmd(ENABLE);
 	
 	ADC1_StartConversion();
 	
 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
 
-	adc1_value = ADC1_GetBufferValue(3);
+	adc1_value = ADC1_GetConversionValue();
 	
 	ADC1_ClearFlag(ADC1_FLAG_EOC);
 	
@@ -204,13 +214,24 @@ uint32_t ADC1_Read(void)
 
 uint32_t ADC2_Read(void)
 {
-	ADC1_ScanModeCmd(ENABLE);
+	ADC1_DeInit();
+	
+	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS,
+						 ADC1_CHANNEL_4,
+						 ADC1_PRESSEL_FCPU_D18,
+						 ADC1_EXTTRIG_TIM,
+						 DISABLE,
+						 ADC1_ALIGN_RIGHT,
+						 ADC1_SCHMITTTRIG_CHANNEL4,
+						 DISABLE);
+						 
+	ADC1_Cmd(ENABLE);
 	
 	ADC1_StartConversion();
 	
 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
 
-	adc2_value = ADC1_GetBufferValue(4);
+	adc2_value = ADC1_GetConversionValue();
 	
 	ADC1_ClearFlag(ADC1_FLAG_EOC);
 	

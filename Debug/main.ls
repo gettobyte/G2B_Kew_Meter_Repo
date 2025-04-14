@@ -25,547 +25,580 @@
   35  0007 8f            	dc.b	143
   36  0008 80            	dc.b	128
   37  0009 84            	dc.b	132
-  80                     	switch	.const
-  81  000a               L6:
-  82  000a 000186a0      	dc.l	100000
-  83  000e               L01:
-  84  000e 000000f1      	dc.l	241
-  85  0012               L21:
-  86  0012 00000064      	dc.l	100
-  87  0016               L41:
-  88  0016 0000000a      	dc.l	10
-  89                     ; 70 main()
-  89                     ; 71 {
+  78                     	switch	.const
+  79  000a               L6:
+  80  000a 0000008c      	dc.l	140
+  81  000e               L01:
+  82  000e 000003e8      	dc.l	1000
+  83  0012               L21:
+  84  0012 000000aa      	dc.l	170
+  85  0016               L41:
+  86  0016 00000064      	dc.l	100
+  87  001a               L61:
+  88  001a 0000000a      	dc.l	10
+  89                     ; 72 main()
+  89                     ; 73 {
   90                     	scross	off
   91                     	switch	.text
   92  0000               _main:
-  96                     ; 72 	CLK_Init();
-  98  0000 cd0151        	call	_CLK_Init
- 100                     ; 73 	GPIO_Int();
- 102  0003 cd00f6        	call	_GPIO_Int
- 104                     ; 74 	Timer4_Init();  // Start Timer4 for display refresh
- 106  0006 cd01b3        	call	_Timer4_Init
- 108                     ; 75 	ADC1_setup();
- 110  0009 cd01c9        	call	_ADC1_setup
- 112                     ; 76 	counter = 0;  // Start from 0
- 114  000c 5f            	clrw	x
- 115  000d bf17          	ldw	L3_counter,x
- 116  000f               L32:
- 117                     ; 80 		voltage = readAverageADC1(8);
- 119  000f a608          	ld	a,#8
- 120  0011 cd025c        	call	_readAverageADC1
- 122  0014 bf02          	ldw	_voltage,x
- 123                     ; 81 		millivolt1 = (voltage * 1600) / 1000;
- 125  0016 be02          	ldw	x,_voltage
- 126  0018 90ae0640      	ldw	y,#1600
- 127  001c cd0000        	call	c_imul
- 129  001f 90ae03e8      	ldw	y,#1000
- 130  0023 65            	divw	x,y
- 131  0024 cd0000        	call	c_uitolx
- 133  0027 ae000e        	ldw	x,#_millivolt1
- 134  002a cd0000        	call	c_rtol
- 136                     ; 82 		sum = 0;
- 138  002d ae0000        	ldw	x,#0
- 139  0030 bf09          	ldw	_sum+2,x
- 140  0032 ae0000        	ldw	x,#0
- 141  0035 bf07          	ldw	_sum,x
- 142                     ; 83 		current = readAverageADC2(8);
- 144  0037 a608          	ld	a,#8
- 145  0039 cd029c        	call	_readAverageADC2
- 147  003c bf00          	ldw	_current,x
- 148                     ; 84 		millivolt2 = (current * 100000) / 241;
- 150  003e be00          	ldw	x,_current
- 151  0040 cd0000        	call	c_uitolx
- 153  0043 ae000a        	ldw	x,#L6
- 154  0046 cd0000        	call	c_lmul
- 156  0049 ae000e        	ldw	x,#L01
- 157  004c cd0000        	call	c_ldiv
- 159  004f ae0006        	ldw	x,#_millivolt2
- 160  0052 cd0000        	call	c_rtol
- 162                     ; 85 		sum = 0;
- 164  0055 ae0000        	ldw	x,#0
- 165  0058 bf09          	ldw	_sum+2,x
- 166  005a ae0000        	ldw	x,#0
- 167  005d bf07          	ldw	_sum,x
- 168                     ; 87 		digits[0] = ((millivolt1 / 100) % 10);  // Voltage hundreds
- 170  005f ae000e        	ldw	x,#_millivolt1
- 171  0062 cd0000        	call	c_ltor
- 173  0065 ae0012        	ldw	x,#L21
- 174  0068 cd0000        	call	c_ludv
- 176  006b ae0016        	ldw	x,#L41
- 177  006e cd0000        	call	c_lumd
- 179  0071 b603          	ld	a,c_lreg+3
- 180  0073 b701          	ld	_digits,a
- 181                     ; 88 		digits[1] = ((millivolt1 / 10) % 10);   // Voltage tens
- 183  0075 ae000e        	ldw	x,#_millivolt1
- 184  0078 cd0000        	call	c_ltor
- 186  007b ae0016        	ldw	x,#L41
- 187  007e cd0000        	call	c_ludv
- 189  0081 ae0016        	ldw	x,#L41
- 190  0084 cd0000        	call	c_lumd
- 192  0087 b603          	ld	a,c_lreg+3
- 193  0089 b702          	ld	_digits+1,a
- 194                     ; 89 		digits[2] = (millivolt1 % 10);          // Voltage ones
- 196  008b ae000e        	ldw	x,#_millivolt1
- 197  008e cd0000        	call	c_ltor
- 199  0091 ae0016        	ldw	x,#L41
- 200  0094 cd0000        	call	c_lumd
- 202  0097 b603          	ld	a,c_lreg+3
- 203  0099 b703          	ld	_digits+2,a
- 204                     ; 91 		digits[3] = ((millivolt2 / 100) % 10);  // Current hundreds
- 206  009b ae0006        	ldw	x,#_millivolt2
- 207  009e cd0000        	call	c_ltor
- 209  00a1 ae0012        	ldw	x,#L21
- 210  00a4 cd0000        	call	c_ludv
- 212  00a7 ae0016        	ldw	x,#L41
- 213  00aa cd0000        	call	c_lumd
- 215  00ad b603          	ld	a,c_lreg+3
- 216  00af b704          	ld	_digits+3,a
- 217                     ; 92 		digits[4] = ((millivolt2 / 10) % 10);   // Current tens
- 219  00b1 ae0006        	ldw	x,#_millivolt2
- 220  00b4 cd0000        	call	c_ltor
- 222  00b7 ae0016        	ldw	x,#L41
- 223  00ba cd0000        	call	c_ludv
- 225  00bd ae0016        	ldw	x,#L41
- 226  00c0 cd0000        	call	c_lumd
- 228  00c3 b603          	ld	a,c_lreg+3
- 229  00c5 b705          	ld	_digits+4,a
- 230                     ; 93 		digits[5] = (millivolt2 % 10);          // Current ones
- 232  00c7 ae0006        	ldw	x,#_millivolt2
- 233  00ca cd0000        	call	c_ltor
- 235  00cd ae0016        	ldw	x,#L41
- 236  00d0 cd0000        	call	c_lumd
- 238  00d3 b603          	ld	a,c_lreg+3
- 239  00d5 b706          	ld	_digits+5,a
- 240                     ; 97 		Delay_us(1000000);
- 242  00d7 ae4240        	ldw	x,#16960
- 243  00da ad04          	call	_Delay_us
- 246  00dc ac0f000f      	jpf	L32
- 280                     ; 102 void Delay_us(uint16_t nCount)
- 280                     ; 103 {
- 281                     	switch	.text
- 282  00e0               _Delay_us:
- 284  00e0 89            	pushw	x
- 285       00000000      OFST:	set	0
- 288  00e1 2002          	jra	L74
- 289  00e3               L54:
- 290                     ; 105         _asm("nop"); _asm("nop");
- 293  00e3 9d            nop
- 298  00e4 9d            nop
- 300  00e5               L74:
- 301                     ; 104     while (nCount--) {
- 303  00e5 1e01          	ldw	x,(OFST+1,sp)
- 304  00e7 1d0001        	subw	x,#1
- 305  00ea 1f01          	ldw	(OFST+1,sp),x
- 306  00ec 1c0001        	addw	x,#1
- 307  00ef a30000        	cpw	x,#0
- 308  00f2 26ef          	jrne	L54
- 309                     ; 107 }
- 312  00f4 85            	popw	x
- 313  00f5 81            	ret
- 338                     ; 110 void GPIO_Int(void) {
- 339                     	switch	.text
- 340  00f6               _GPIO_Int:
- 344                     ; 111 	GPIO_DeInit(GPIOD);
- 346  00f6 ae500f        	ldw	x,#20495
- 347  00f9 cd0000        	call	_GPIO_DeInit
- 349                     ; 112 	GPIO_DeInit(GPIOC);
- 351  00fc ae500a        	ldw	x,#20490
- 352  00ff cd0000        	call	_GPIO_DeInit
- 354                     ; 113 	GPIO_DeInit(GPIOA);
- 356  0102 ae5000        	ldw	x,#20480
- 357  0105 cd0000        	call	_GPIO_DeInit
- 359                     ; 114 	GPIO_DeInit(GPIOB);
- 361  0108 ae5005        	ldw	x,#20485
- 362  010b cd0000        	call	_GPIO_DeInit
- 364                     ; 115 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)PORTD_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
- 366  010e 4bf0          	push	#240
- 367  0110 4b70          	push	#112
- 368  0112 ae500f        	ldw	x,#20495
- 369  0115 cd0000        	call	_GPIO_Init
- 371  0118 85            	popw	x
- 372                     ; 116 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_2, GPIO_MODE_IN_FL_NO_IT);
- 374  0119 4b00          	push	#0
- 375  011b 4b04          	push	#4
- 376  011d ae500f        	ldw	x,#20495
- 377  0120 cd0000        	call	_GPIO_Init
- 379  0123 85            	popw	x
- 380                     ; 117 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_3, GPIO_MODE_IN_FL_NO_IT);
- 382  0124 4b00          	push	#0
- 383  0126 4b08          	push	#8
- 384  0128 ae500f        	ldw	x,#20495
- 385  012b cd0000        	call	_GPIO_Init
- 387  012e 85            	popw	x
- 388                     ; 118 	GPIO_Init(GPIOC, (GPIO_Pin_TypeDef)PORTC_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
- 390  012f 4bf0          	push	#240
- 391  0131 4bf8          	push	#248
- 392  0133 ae500a        	ldw	x,#20490
- 393  0136 cd0000        	call	_GPIO_Init
- 395  0139 85            	popw	x
- 396                     ; 119 	GPIO_Init(GPIOA, (GPIO_Pin_TypeDef)PORTA_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
- 398  013a 4bf0          	push	#240
- 399  013c 4b0e          	push	#14
- 400  013e ae5000        	ldw	x,#20480
- 401  0141 cd0000        	call	_GPIO_Init
- 403  0144 85            	popw	x
- 404                     ; 120 	GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)PORTB_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
- 406  0145 4bf0          	push	#240
- 407  0147 4b30          	push	#48
- 408  0149 ae5005        	ldw	x,#20485
- 409  014c cd0000        	call	_GPIO_Init
- 411  014f 85            	popw	x
- 412                     ; 121 }
- 415  0150 81            	ret
- 448                     ; 124 void CLK_Init(void) {
- 449                     	switch	.text
- 450  0151               _CLK_Init:
- 454                     ; 125 	CLK_DeInit();
- 456  0151 cd0000        	call	_CLK_DeInit
- 458                     ; 127 	CLK_HSECmd(DISABLE);
- 460  0154 4f            	clr	a
- 461  0155 cd0000        	call	_CLK_HSECmd
- 463                     ; 128 	CLK_LSICmd(DISABLE);
- 465  0158 4f            	clr	a
- 466  0159 cd0000        	call	_CLK_LSICmd
- 468                     ; 129 	CLK_HSICmd(ENABLE);
- 470  015c a601          	ld	a,#1
- 471  015e cd0000        	call	_CLK_HSICmd
- 474  0161               L57:
- 475                     ; 130 	while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);
- 477  0161 ae0102        	ldw	x,#258
- 478  0164 cd0000        	call	_CLK_GetFlagStatus
- 480  0167 4d            	tnz	a
- 481  0168 27f7          	jreq	L57
- 482                     ; 132 	CLK_ClockSwitchCmd(ENABLE);
- 484  016a a601          	ld	a,#1
- 485  016c cd0000        	call	_CLK_ClockSwitchCmd
- 487                     ; 133 	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV4);
- 489  016f a610          	ld	a,#16
- 490  0171 cd0000        	call	_CLK_HSIPrescalerConfig
- 492                     ; 134 	CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);
- 494  0174 a680          	ld	a,#128
- 495  0176 cd0000        	call	_CLK_SYSCLKConfig
- 497                     ; 136 	CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI,
- 497                     ; 137 	DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
- 499  0179 4b01          	push	#1
- 500  017b 4b00          	push	#0
- 501  017d ae01e1        	ldw	x,#481
- 502  0180 cd0000        	call	_CLK_ClockSwitchConfig
- 504  0183 85            	popw	x
- 505                     ; 139 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
- 507  0184 ae0100        	ldw	x,#256
- 508  0187 cd0000        	call	_CLK_PeripheralClockConfig
- 510                     ; 140 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
- 512  018a 5f            	clrw	x
- 513  018b cd0000        	call	_CLK_PeripheralClockConfig
- 515                     ; 141 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, ENABLE);
- 517  018e ae1301        	ldw	x,#4865
- 518  0191 cd0000        	call	_CLK_PeripheralClockConfig
- 520                     ; 142 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
- 522  0194 ae1200        	ldw	x,#4608
- 523  0197 cd0000        	call	_CLK_PeripheralClockConfig
- 525                     ; 143 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);
- 527  019a ae0300        	ldw	x,#768
- 528  019d cd0000        	call	_CLK_PeripheralClockConfig
- 530                     ; 144 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, DISABLE);
- 532  01a0 ae0700        	ldw	x,#1792
- 533  01a3 cd0000        	call	_CLK_PeripheralClockConfig
- 535                     ; 145 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, DISABLE);
- 537  01a6 ae0500        	ldw	x,#1280
- 538  01a9 cd0000        	call	_CLK_PeripheralClockConfig
- 540                     ; 146 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);;
- 542  01ac ae0401        	ldw	x,#1025
- 543  01af cd0000        	call	_CLK_PeripheralClockConfig
- 545                     ; 147 }
- 549  01b2 81            	ret
- 577                     ; 150 void Timer4_Init(void) {
- 578                     	switch	.text
- 579  01b3               _Timer4_Init:
- 583                     ; 151 	TIM4_DeInit();
- 585  01b3 cd0000        	call	_TIM4_DeInit
- 587                     ; 152 	TIM4_TimeBaseInit(TIM4_PRESCALER_64, 156);      
- 589  01b6 ae069c        	ldw	x,#1692
- 590  01b9 cd0000        	call	_TIM4_TimeBaseInit
- 592                     ; 153 	TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
- 594  01bc ae0101        	ldw	x,#257
- 595  01bf cd0000        	call	_TIM4_ITConfig
- 597                     ; 154 	TIM4_Cmd(ENABLE);
- 599  01c2 a601          	ld	a,#1
- 600  01c4 cd0000        	call	_TIM4_Cmd
- 602                     ; 156 	enableInterrupts();
- 605  01c7 9a            rim
- 607                     ; 157 }
- 611  01c8 81            	ret
- 639                     ; 159 void ADC1_setup(void)
- 639                     ; 160 {
- 640                     	switch	.text
- 641  01c9               _ADC1_setup:
- 645                     ; 161   ADC1_DeInit();         
- 647  01c9 cd0000        	call	_ADC1_DeInit
- 649                     ; 163 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
- 649                     ; 164 						ADC1_CHANNEL_3,
- 649                     ; 165 						ADC1_PRESSEL_FCPU_D18, 
- 649                     ; 166 						ADC1_EXTTRIG_TIM, 
- 649                     ; 167 						DISABLE, 
- 649                     ; 168 						ADC1_ALIGN_RIGHT, 
- 649                     ; 169 						ADC1_SCHMITTTRIG_CHANNEL3, 
- 649                     ; 170 						DISABLE);
- 651  01cc 4b00          	push	#0
- 652  01ce 4b03          	push	#3
- 653  01d0 4b08          	push	#8
- 654  01d2 4b00          	push	#0
- 655  01d4 4b00          	push	#0
- 656  01d6 4b70          	push	#112
- 657  01d8 ae0103        	ldw	x,#259
- 658  01db cd0000        	call	_ADC1_Init
- 660  01de 5b06          	addw	sp,#6
- 661                     ; 172 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
- 661                     ; 173 						ADC1_CHANNEL_4,
- 661                     ; 174 						ADC1_PRESSEL_FCPU_D18, 
- 661                     ; 175 						ADC1_EXTTRIG_TIM, 
- 661                     ; 176 						DISABLE, 
- 661                     ; 177 						ADC1_ALIGN_RIGHT, 
- 661                     ; 178 						ADC1_SCHMITTTRIG_CHANNEL4, 
- 661                     ; 179 						DISABLE);
- 663  01e0 4b00          	push	#0
- 664  01e2 4b04          	push	#4
- 665  01e4 4b08          	push	#8
- 666  01e6 4b00          	push	#0
- 667  01e8 4b00          	push	#0
- 668  01ea 4b70          	push	#112
- 669  01ec ae0104        	ldw	x,#260
- 670  01ef cd0000        	call	_ADC1_Init
- 672  01f2 5b06          	addw	sp,#6
- 673                     ; 181 	ADC1_ConversionConfig(ADC1_CONVERSIONMODE_CONTINUOUS,
- 673                     ; 182 												((ADC1_Channel_TypeDef)(ADC1_CHANNEL_3 | ADC1_CHANNEL_4)),
- 673                     ; 183 												ADC1_ALIGN_RIGHT);
- 675  01f4 4b08          	push	#8
- 676  01f6 ae0107        	ldw	x,#263
- 677  01f9 cd0000        	call	_ADC1_ConversionConfig
- 679  01fc 84            	pop	a
- 680                     ; 185 	ADC1_DataBufferCmd(ENABLE);
- 682  01fd a601          	ld	a,#1
- 683  01ff cd0000        	call	_ADC1_DataBufferCmd
- 685                     ; 187 	ADC1_Cmd(ENABLE);
- 687  0202 a601          	ld	a,#1
- 688  0204 cd0000        	call	_ADC1_Cmd
- 690                     ; 188 }
- 693  0207 81            	ret
- 722                     ; 190 uint32_t ADC1_Read(void)
- 722                     ; 191 {
- 723                     	switch	.text
- 724  0208               _ADC1_Read:
- 728                     ; 192 	ADC1_ScanModeCmd(ENABLE);
- 730  0208 a601          	ld	a,#1
- 731  020a cd0000        	call	_ADC1_ScanModeCmd
- 733                     ; 194 	ADC1_StartConversion();
- 735  020d cd0000        	call	_ADC1_StartConversion
- 738  0210               L331:
- 739                     ; 196 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
- 741  0210 a680          	ld	a,#128
- 742  0212 cd0000        	call	_ADC1_GetFlagStatus
- 744  0215 4d            	tnz	a
- 745  0216 27f8          	jreq	L331
- 746                     ; 198 	adc1_value = ADC1_GetBufferValue(3);
- 748  0218 a603          	ld	a,#3
- 749  021a cd0000        	call	_ADC1_GetBufferValue
- 751  021d cd0000        	call	c_uitolx
- 753  0220 ae0012        	ldw	x,#_adc1_value
- 754  0223 cd0000        	call	c_rtol
- 756                     ; 200 	ADC1_ClearFlag(ADC1_FLAG_EOC);
- 758  0226 a680          	ld	a,#128
- 759  0228 cd0000        	call	_ADC1_ClearFlag
- 761                     ; 202 	return adc1_value;
- 763  022b ae0012        	ldw	x,#_adc1_value
- 764  022e cd0000        	call	c_ltor
- 768  0231 81            	ret
- 797                     ; 205 uint32_t ADC2_Read(void)
- 797                     ; 206 {
- 798                     	switch	.text
- 799  0232               _ADC2_Read:
- 803                     ; 207 	ADC1_ScanModeCmd(ENABLE);
- 805  0232 a601          	ld	a,#1
- 806  0234 cd0000        	call	_ADC1_ScanModeCmd
- 808                     ; 209 	ADC1_StartConversion();
- 810  0237 cd0000        	call	_ADC1_StartConversion
- 813  023a               L151:
- 814                     ; 211 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
- 816  023a a680          	ld	a,#128
- 817  023c cd0000        	call	_ADC1_GetFlagStatus
- 819  023f 4d            	tnz	a
- 820  0240 27f8          	jreq	L151
- 821                     ; 213 	adc2_value = ADC1_GetBufferValue(4);
- 823  0242 a604          	ld	a,#4
- 824  0244 cd0000        	call	_ADC1_GetBufferValue
- 826  0247 cd0000        	call	c_uitolx
- 828  024a ae000a        	ldw	x,#_adc2_value
- 829  024d cd0000        	call	c_rtol
- 831                     ; 215 	ADC1_ClearFlag(ADC1_FLAG_EOC);
- 833  0250 a680          	ld	a,#128
- 834  0252 cd0000        	call	_ADC1_ClearFlag
- 836                     ; 217 	return adc2_value;
- 838  0255 ae000a        	ldw	x,#_adc2_value
- 839  0258 cd0000        	call	c_ltor
- 843  025b 81            	ret
- 881                     ; 220 uint16_t readAverageADC1(uint8_t samples) {
- 882                     	switch	.text
- 883  025c               _readAverageADC1:
- 885  025c 88            	push	a
- 886  025d 5204          	subw	sp,#4
- 887       00000004      OFST:	set	4
- 890                     ; 222 	for (i = 0; i < samples; i++) {
- 892  025f 3f05          	clr	_i
- 894  0261 2010          	jra	L771
- 895  0263               L371:
- 896                     ; 223 			sum += ADC1_Read();
- 898  0263 ada3          	call	_ADC1_Read
- 900  0265 ae0007        	ldw	x,#_sum
- 901  0268 cd0000        	call	c_lgadd
- 903                     ; 224 			Delay_us(200);  // small delay between samples
- 905  026b ae00c8        	ldw	x,#200
- 906  026e cd00e0        	call	_Delay_us
- 908                     ; 222 	for (i = 0; i < samples; i++) {
- 910  0271 3c05          	inc	_i
- 911  0273               L771:
- 914  0273 b605          	ld	a,_i
- 915  0275 1105          	cp	a,(OFST+1,sp)
- 916  0277 25ea          	jrult	L371
- 917                     ; 226 	return sum / samples;
- 919  0279 7b05          	ld	a,(OFST+1,sp)
- 920  027b b703          	ld	c_lreg+3,a
- 921  027d 3f02          	clr	c_lreg+2
- 922  027f 3f01          	clr	c_lreg+1
- 923  0281 3f00          	clr	c_lreg
- 924  0283 96            	ldw	x,sp
- 925  0284 1c0001        	addw	x,#OFST-3
- 926  0287 cd0000        	call	c_rtol
- 929  028a ae0007        	ldw	x,#_sum
- 930  028d cd0000        	call	c_ltor
- 932  0290 96            	ldw	x,sp
- 933  0291 1c0001        	addw	x,#OFST-3
- 934  0294 cd0000        	call	c_ludv
- 936  0297 be02          	ldw	x,c_lreg+2
- 939  0299 5b05          	addw	sp,#5
- 940  029b 81            	ret
- 978                     ; 229 uint16_t readAverageADC2(uint8_t samples) {
- 979                     	switch	.text
- 980  029c               _readAverageADC2:
- 982  029c 88            	push	a
- 983  029d 5204          	subw	sp,#4
- 984       00000004      OFST:	set	4
- 987                     ; 231 	for (i = 0; i < samples; i++) {
- 989  029f 3f05          	clr	_i
- 991  02a1 2010          	jra	L522
- 992  02a3               L122:
- 993                     ; 232 			sum += ADC2_Read();
- 995  02a3 ad8d          	call	_ADC2_Read
- 997  02a5 ae0007        	ldw	x,#_sum
- 998  02a8 cd0000        	call	c_lgadd
-1000                     ; 233 			Delay_us(200);  // small delay between samples
-1002  02ab ae00c8        	ldw	x,#200
-1003  02ae cd00e0        	call	_Delay_us
-1005                     ; 231 	for (i = 0; i < samples; i++) {
-1007  02b1 3c05          	inc	_i
-1008  02b3               L522:
-1011  02b3 b605          	ld	a,_i
-1012  02b5 1105          	cp	a,(OFST+1,sp)
-1013  02b7 25ea          	jrult	L122
-1014                     ; 235 	return sum / samples;
-1016  02b9 7b05          	ld	a,(OFST+1,sp)
-1017  02bb b703          	ld	c_lreg+3,a
-1018  02bd 3f02          	clr	c_lreg+2
-1019  02bf 3f01          	clr	c_lreg+1
-1020  02c1 3f00          	clr	c_lreg
-1021  02c3 96            	ldw	x,sp
-1022  02c4 1c0001        	addw	x,#OFST-3
-1023  02c7 cd0000        	call	c_rtol
-1026  02ca ae0007        	ldw	x,#_sum
-1027  02cd cd0000        	call	c_ltor
-1029  02d0 96            	ldw	x,sp
-1030  02d1 1c0001        	addw	x,#OFST-3
-1031  02d4 cd0000        	call	c_ludv
-1033  02d7 be02          	ldw	x,c_lreg+2
-1036  02d9 5b05          	addw	sp,#5
-1037  02db 81            	ret
-1180                     	xdef	_main
-1181                     	xdef	_readAverageADC2
-1182                     	xdef	_readAverageADC1
-1183                     	xdef	_ADC2_Read
-1184                     	xdef	_ADC1_Read
-1185                     	xdef	_ADC1_setup
-1186                     	xdef	_Timer4_Init
-1187                     	xdef	_CLK_Init
-1188                     	xdef	_GPIO_Int
-1189                     	xdef	_Delay_us
-1190                     	xdef	_Segment_Patterns
-1191                     	switch	.ubsct
-1192  0000               _current:
-1193  0000 0000          	ds.b	2
-1194                     	xdef	_current
-1195  0002               _voltage:
-1196  0002 0000          	ds.b	2
-1197                     	xdef	_voltage
-1198  0004               _samples:
-1199  0004 00            	ds.b	1
-1200                     	xdef	_samples
-1201  0005               _i:
-1202  0005 00            	ds.b	1
-1203                     	xdef	_i
-1204                     	xdef	_sum
-1205  0006               _millivolt2:
-1206  0006 00000000      	ds.b	4
-1207                     	xdef	_millivolt2
-1208  000a               _adc2_value:
-1209  000a 00000000      	ds.b	4
-1210                     	xdef	_adc2_value
-1211  000e               _millivolt1:
-1212  000e 00000000      	ds.b	4
-1213                     	xdef	_millivolt1
-1214  0012               _adc1_value:
-1215  0012 00000000      	ds.b	4
-1216                     	xdef	_adc1_value
-1217  0016               _pattern:
-1218  0016 00            	ds.b	1
-1219                     	xdef	_pattern
-1220  0017               L3_counter:
-1221  0017 0000          	ds.b	2
-1222                     	xdef	_digits
-1223                     	xdef	_currentDigit
-1224                     	xref	_TIM4_ITConfig
-1225                     	xref	_TIM4_Cmd
-1226                     	xref	_TIM4_TimeBaseInit
-1227                     	xref	_TIM4_DeInit
-1228                     	xref	_GPIO_Init
-1229                     	xref	_GPIO_DeInit
-1230                     	xref	_CLK_GetFlagStatus
-1231                     	xref	_CLK_SYSCLKConfig
-1232                     	xref	_CLK_HSIPrescalerConfig
-1233                     	xref	_CLK_ClockSwitchConfig
-1234                     	xref	_CLK_PeripheralClockConfig
-1235                     	xref	_CLK_ClockSwitchCmd
-1236                     	xref	_CLK_LSICmd
-1237                     	xref	_CLK_HSICmd
-1238                     	xref	_CLK_HSECmd
-1239                     	xref	_CLK_DeInit
-1240                     	xref	_ADC1_ClearFlag
-1241                     	xref	_ADC1_GetFlagStatus
-1242                     	xref	_ADC1_GetBufferValue
-1243                     	xref	_ADC1_StartConversion
-1244                     	xref	_ADC1_ConversionConfig
-1245                     	xref	_ADC1_DataBufferCmd
-1246                     	xref	_ADC1_ScanModeCmd
-1247                     	xref	_ADC1_Cmd
-1248                     	xref	_ADC1_Init
-1249                     	xref	_ADC1_DeInit
-1250                     	xref.b	c_lreg
-1251                     	xref.b	c_x
-1271                     	xref	c_lgadd
-1272                     	xref	c_lumd
-1273                     	xref	c_ludv
-1274                     	xref	c_ltor
-1275                     	xref	c_ldiv
-1276                     	xref	c_lmul
-1277                     	xref	c_rtol
-1278                     	xref	c_uitolx
-1279                     	xref	c_imul
-1280                     	end
+  96                     ; 74 	CLK_Init();
+  98  0000 cd015a        	call	_CLK_Init
+ 100                     ; 75 	GPIO_Int();
+ 102  0003 cd00ff        	call	_GPIO_Int
+ 104                     ; 76 	Timer4_Init();  // Start Timer4 for display refresh
+ 106  0006 cd01bc        	call	_Timer4_Init
+ 108  0009               L32:
+ 109                     ; 80 		voltage = readAverageADC1(64);
+ 111  0009 a640          	ld	a,#64
+ 112  000b cd028f        	call	_readAverageADC1
+ 114  000e cd0000        	call	c_uitolx
+ 116  0011 ae000c        	ldw	x,#_voltage
+ 117  0014 cd0000        	call	c_rtol
+ 119                     ; 81 		millivolt1 = (voltage * 230L) / 140;
+ 121  0017 ae000c        	ldw	x,#_voltage
+ 122  001a cd0000        	call	c_ltor
+ 124  001d a6e6          	ld	a,#230
+ 125  001f cd0000        	call	c_smul
+ 127  0022 ae000a        	ldw	x,#L6
+ 128  0025 cd0000        	call	c_ludv
+ 130  0028 ae0016        	ldw	x,#_millivolt1
+ 131  002b cd0000        	call	c_rtol
+ 133                     ; 82 		sum = 0;
+ 135  002e ae0000        	ldw	x,#0
+ 136  0031 bf09          	ldw	_sum+2,x
+ 137  0033 ae0000        	ldw	x,#0
+ 138  0036 bf07          	ldw	_sum,x
+ 139                     ; 83 		current = readAverageADC2(32);
+ 141  0038 a620          	ld	a,#32
+ 142  003a cd02d0        	call	_readAverageADC2
+ 144  003d cd0000        	call	c_uitolx
+ 146  0040 ae0008        	ldw	x,#_current
+ 147  0043 cd0000        	call	c_rtol
+ 149                     ; 84 		millivolt2 = (current * 1000) / 170;
+ 151  0046 ae0008        	ldw	x,#_current
+ 152  0049 cd0000        	call	c_ltor
+ 154  004c ae000e        	ldw	x,#L01
+ 155  004f cd0000        	call	c_lmul
+ 157  0052 ae0012        	ldw	x,#L21
+ 158  0055 cd0000        	call	c_ludv
+ 160  0058 ae0012        	ldw	x,#_millivolt2
+ 161  005b cd0000        	call	c_rtol
+ 163                     ; 85 		sum = 0;
+ 165  005e ae0000        	ldw	x,#0
+ 166  0061 bf09          	ldw	_sum+2,x
+ 167  0063 ae0000        	ldw	x,#0
+ 168  0066 bf07          	ldw	_sum,x
+ 169                     ; 87 		digits[0] = ((millivolt1 / 100) % 10);  // Voltage hundreds
+ 171  0068 ae0016        	ldw	x,#_millivolt1
+ 172  006b cd0000        	call	c_ltor
+ 174  006e ae0016        	ldw	x,#L41
+ 175  0071 cd0000        	call	c_ludv
+ 177  0074 ae001a        	ldw	x,#L61
+ 178  0077 cd0000        	call	c_lumd
+ 180  007a b603          	ld	a,c_lreg+3
+ 181  007c b701          	ld	_digits,a
+ 182                     ; 88 		digits[1] = ((millivolt1 / 10) % 10);   // Voltage tens
+ 184  007e ae0016        	ldw	x,#_millivolt1
+ 185  0081 cd0000        	call	c_ltor
+ 187  0084 ae001a        	ldw	x,#L61
+ 188  0087 cd0000        	call	c_ludv
+ 190  008a ae001a        	ldw	x,#L61
+ 191  008d cd0000        	call	c_lumd
+ 193  0090 b603          	ld	a,c_lreg+3
+ 194  0092 b702          	ld	_digits+1,a
+ 195                     ; 89 		digits[2] = (millivolt1 % 10);          // Voltage ones
+ 197  0094 ae0016        	ldw	x,#_millivolt1
+ 198  0097 cd0000        	call	c_ltor
+ 200  009a ae001a        	ldw	x,#L61
+ 201  009d cd0000        	call	c_lumd
+ 203  00a0 b603          	ld	a,c_lreg+3
+ 204  00a2 b703          	ld	_digits+2,a
+ 205                     ; 91 		digits[3] = ((millivolt2 / 100) % 10);  // Current hundreds
+ 207  00a4 ae0012        	ldw	x,#_millivolt2
+ 208  00a7 cd0000        	call	c_ltor
+ 210  00aa ae0016        	ldw	x,#L41
+ 211  00ad cd0000        	call	c_ludv
+ 213  00b0 ae001a        	ldw	x,#L61
+ 214  00b3 cd0000        	call	c_lumd
+ 216  00b6 b603          	ld	a,c_lreg+3
+ 217  00b8 b704          	ld	_digits+3,a
+ 218                     ; 92 		digits[4] = ((millivolt2 / 10) % 10);   // Current tens
+ 220  00ba ae0012        	ldw	x,#_millivolt2
+ 221  00bd cd0000        	call	c_ltor
+ 223  00c0 ae001a        	ldw	x,#L61
+ 224  00c3 cd0000        	call	c_ludv
+ 226  00c6 ae001a        	ldw	x,#L61
+ 227  00c9 cd0000        	call	c_lumd
+ 229  00cc b603          	ld	a,c_lreg+3
+ 230  00ce b705          	ld	_digits+4,a
+ 231                     ; 93 		digits[5] = (millivolt2 % 10);          // Current ones
+ 233  00d0 ae0012        	ldw	x,#_millivolt2
+ 234  00d3 cd0000        	call	c_ltor
+ 236  00d6 ae001a        	ldw	x,#L61
+ 237  00d9 cd0000        	call	c_lumd
+ 239  00dc b603          	ld	a,c_lreg+3
+ 240  00de b706          	ld	_digits+5,a
+ 241                     ; 96 		Delay_us(100000000);
+ 243  00e0 aee100        	ldw	x,#57600
+ 244  00e3 ad04          	call	_Delay_us
+ 247  00e5 ac090009      	jpf	L32
+ 281                     ; 101 void Delay_us(uint16_t nCount)
+ 281                     ; 102 {
+ 282                     	switch	.text
+ 283  00e9               _Delay_us:
+ 285  00e9 89            	pushw	x
+ 286       00000000      OFST:	set	0
+ 289  00ea 2002          	jra	L74
+ 290  00ec               L54:
+ 291                     ; 104         _asm("nop"); _asm("nop");
+ 294  00ec 9d            nop
+ 299  00ed 9d            nop
+ 301  00ee               L74:
+ 302                     ; 103     while (nCount--) {
+ 304  00ee 1e01          	ldw	x,(OFST+1,sp)
+ 305  00f0 1d0001        	subw	x,#1
+ 306  00f3 1f01          	ldw	(OFST+1,sp),x
+ 307  00f5 1c0001        	addw	x,#1
+ 308  00f8 a30000        	cpw	x,#0
+ 309  00fb 26ef          	jrne	L54
+ 310                     ; 106 }
+ 313  00fd 85            	popw	x
+ 314  00fe 81            	ret
+ 339                     ; 109 void GPIO_Int(void) {
+ 340                     	switch	.text
+ 341  00ff               _GPIO_Int:
+ 345                     ; 110 	GPIO_DeInit(GPIOD);
+ 347  00ff ae500f        	ldw	x,#20495
+ 348  0102 cd0000        	call	_GPIO_DeInit
+ 350                     ; 111 	GPIO_DeInit(GPIOC);
+ 352  0105 ae500a        	ldw	x,#20490
+ 353  0108 cd0000        	call	_GPIO_DeInit
+ 355                     ; 112 	GPIO_DeInit(GPIOA);
+ 357  010b ae5000        	ldw	x,#20480
+ 358  010e cd0000        	call	_GPIO_DeInit
+ 360                     ; 113 	GPIO_DeInit(GPIOB);
+ 362  0111 ae5005        	ldw	x,#20485
+ 363  0114 cd0000        	call	_GPIO_DeInit
+ 365                     ; 114 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)PORTD_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+ 367  0117 4bf0          	push	#240
+ 368  0119 4b70          	push	#112
+ 369  011b ae500f        	ldw	x,#20495
+ 370  011e cd0000        	call	_GPIO_Init
+ 372  0121 85            	popw	x
+ 373                     ; 115 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_2, GPIO_MODE_IN_FL_NO_IT);
+ 375  0122 4b00          	push	#0
+ 376  0124 4b04          	push	#4
+ 377  0126 ae500f        	ldw	x,#20495
+ 378  0129 cd0000        	call	_GPIO_Init
+ 380  012c 85            	popw	x
+ 381                     ; 116 	GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPIO_PIN_3, GPIO_MODE_IN_FL_NO_IT);
+ 383  012d 4b00          	push	#0
+ 384  012f 4b08          	push	#8
+ 385  0131 ae500f        	ldw	x,#20495
+ 386  0134 cd0000        	call	_GPIO_Init
+ 388  0137 85            	popw	x
+ 389                     ; 117 	GPIO_Init(GPIOC, (GPIO_Pin_TypeDef)PORTC_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+ 391  0138 4bf0          	push	#240
+ 392  013a 4bf8          	push	#248
+ 393  013c ae500a        	ldw	x,#20490
+ 394  013f cd0000        	call	_GPIO_Init
+ 396  0142 85            	popw	x
+ 397                     ; 118 	GPIO_Init(GPIOA, (GPIO_Pin_TypeDef)PORTA_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+ 399  0143 4bf0          	push	#240
+ 400  0145 4b0e          	push	#14
+ 401  0147 ae5000        	ldw	x,#20480
+ 402  014a cd0000        	call	_GPIO_Init
+ 404  014d 85            	popw	x
+ 405                     ; 119 	GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)PORTB_GPIO_PINS, GPIO_MODE_OUT_PP_HIGH_FAST);
+ 407  014e 4bf0          	push	#240
+ 408  0150 4b30          	push	#48
+ 409  0152 ae5005        	ldw	x,#20485
+ 410  0155 cd0000        	call	_GPIO_Init
+ 412  0158 85            	popw	x
+ 413                     ; 120 }
+ 416  0159 81            	ret
+ 449                     ; 123 void CLK_Init(void) {
+ 450                     	switch	.text
+ 451  015a               _CLK_Init:
+ 455                     ; 124 	CLK_DeInit();
+ 457  015a cd0000        	call	_CLK_DeInit
+ 459                     ; 126 	CLK_HSECmd(DISABLE);
+ 461  015d 4f            	clr	a
+ 462  015e cd0000        	call	_CLK_HSECmd
+ 464                     ; 127 	CLK_LSICmd(DISABLE);
+ 466  0161 4f            	clr	a
+ 467  0162 cd0000        	call	_CLK_LSICmd
+ 469                     ; 128 	CLK_HSICmd(ENABLE);
+ 471  0165 a601          	ld	a,#1
+ 472  0167 cd0000        	call	_CLK_HSICmd
+ 475  016a               L57:
+ 476                     ; 129 	while(CLK_GetFlagStatus(CLK_FLAG_HSIRDY) == FALSE);
+ 478  016a ae0102        	ldw	x,#258
+ 479  016d cd0000        	call	_CLK_GetFlagStatus
+ 481  0170 4d            	tnz	a
+ 482  0171 27f7          	jreq	L57
+ 483                     ; 131 	CLK_ClockSwitchCmd(ENABLE);
+ 485  0173 a601          	ld	a,#1
+ 486  0175 cd0000        	call	_CLK_ClockSwitchCmd
+ 488                     ; 132 	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV4);
+ 490  0178 a610          	ld	a,#16
+ 491  017a cd0000        	call	_CLK_HSIPrescalerConfig
+ 493                     ; 133 	CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);
+ 495  017d a680          	ld	a,#128
+ 496  017f cd0000        	call	_CLK_SYSCLKConfig
+ 498                     ; 135 	CLK_ClockSwitchConfig(CLK_SWITCHMODE_AUTO, CLK_SOURCE_HSI,
+ 498                     ; 136 	DISABLE, CLK_CURRENTCLOCKSTATE_ENABLE);
+ 500  0182 4b01          	push	#1
+ 501  0184 4b00          	push	#0
+ 502  0186 ae01e1        	ldw	x,#481
+ 503  0189 cd0000        	call	_CLK_ClockSwitchConfig
+ 505  018c 85            	popw	x
+ 506                     ; 138 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_SPI, DISABLE);
+ 508  018d ae0100        	ldw	x,#256
+ 509  0190 cd0000        	call	_CLK_PeripheralClockConfig
+ 511                     ; 139 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_I2C, DISABLE);
+ 513  0193 5f            	clrw	x
+ 514  0194 cd0000        	call	_CLK_PeripheralClockConfig
+ 516                     ; 140 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_ADC, ENABLE);
+ 518  0197 ae1301        	ldw	x,#4865
+ 519  019a cd0000        	call	_CLK_PeripheralClockConfig
+ 521                     ; 141 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_AWU, DISABLE);
+ 523  019d ae1200        	ldw	x,#4608
+ 524  01a0 cd0000        	call	_CLK_PeripheralClockConfig
+ 526                     ; 142 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_UART1, DISABLE);
+ 528  01a3 ae0300        	ldw	x,#768
+ 529  01a6 cd0000        	call	_CLK_PeripheralClockConfig
+ 531                     ; 143 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER1, DISABLE);
+ 533  01a9 ae0700        	ldw	x,#1792
+ 534  01ac cd0000        	call	_CLK_PeripheralClockConfig
+ 536                     ; 144 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER2, DISABLE);
+ 538  01af ae0500        	ldw	x,#1280
+ 539  01b2 cd0000        	call	_CLK_PeripheralClockConfig
+ 541                     ; 145 	CLK_PeripheralClockConfig(CLK_PERIPHERAL_TIMER4, ENABLE);;
+ 543  01b5 ae0401        	ldw	x,#1025
+ 544  01b8 cd0000        	call	_CLK_PeripheralClockConfig
+ 546                     ; 146 }
+ 550  01bb 81            	ret
+ 578                     ; 149 void Timer4_Init(void) {
+ 579                     	switch	.text
+ 580  01bc               _Timer4_Init:
+ 584                     ; 150 	TIM4_DeInit();
+ 586  01bc cd0000        	call	_TIM4_DeInit
+ 588                     ; 151 	TIM4_TimeBaseInit(TIM4_PRESCALER_64, 156);      
+ 590  01bf ae069c        	ldw	x,#1692
+ 591  01c2 cd0000        	call	_TIM4_TimeBaseInit
+ 593                     ; 152 	TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
+ 595  01c5 ae0101        	ldw	x,#257
+ 596  01c8 cd0000        	call	_TIM4_ITConfig
+ 598                     ; 153 	TIM4_Cmd(ENABLE);
+ 600  01cb a601          	ld	a,#1
+ 601  01cd cd0000        	call	_TIM4_Cmd
+ 603                     ; 155 	enableInterrupts();
+ 606  01d0 9a            rim
+ 608                     ; 156 }
+ 612  01d1 81            	ret
+ 640                     ; 158 void ADC1_setup(void)
+ 640                     ; 159 {
+ 641                     	switch	.text
+ 642  01d2               _ADC1_setup:
+ 646                     ; 160   ADC1_DeInit();         
+ 648  01d2 cd0000        	call	_ADC1_DeInit
+ 650                     ; 162 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
+ 650                     ; 163 						ADC1_CHANNEL_3,
+ 650                     ; 164 						ADC1_PRESSEL_FCPU_D18, 
+ 650                     ; 165 						ADC1_EXTTRIG_TIM, 
+ 650                     ; 166 						DISABLE, 
+ 650                     ; 167 						ADC1_ALIGN_RIGHT, 
+ 650                     ; 168 						ADC1_SCHMITTTRIG_CHANNEL3, 
+ 650                     ; 169 						DISABLE);
+ 652  01d5 4b00          	push	#0
+ 653  01d7 4b03          	push	#3
+ 654  01d9 4b08          	push	#8
+ 655  01db 4b00          	push	#0
+ 656  01dd 4b00          	push	#0
+ 657  01df 4b70          	push	#112
+ 658  01e1 ae0103        	ldw	x,#259
+ 659  01e4 cd0000        	call	_ADC1_Init
+ 661  01e7 5b06          	addw	sp,#6
+ 662                     ; 171 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS, 
+ 662                     ; 172 						ADC1_CHANNEL_4,
+ 662                     ; 173 						ADC1_PRESSEL_FCPU_D18, 
+ 662                     ; 174 						ADC1_EXTTRIG_TIM, 
+ 662                     ; 175 						DISABLE, 
+ 662                     ; 176 						ADC1_ALIGN_RIGHT, 
+ 662                     ; 177 						ADC1_SCHMITTTRIG_CHANNEL4, 
+ 662                     ; 178 						DISABLE);
+ 664  01e9 4b00          	push	#0
+ 665  01eb 4b04          	push	#4
+ 666  01ed 4b08          	push	#8
+ 667  01ef 4b00          	push	#0
+ 668  01f1 4b00          	push	#0
+ 669  01f3 4b70          	push	#112
+ 670  01f5 ae0104        	ldw	x,#260
+ 671  01f8 cd0000        	call	_ADC1_Init
+ 673  01fb 5b06          	addw	sp,#6
+ 674                     ; 180 	ADC1_ConversionConfig(ADC1_CONVERSIONMODE_CONTINUOUS,
+ 674                     ; 181 												((ADC1_Channel_TypeDef)(ADC1_CHANNEL_3 | ADC1_CHANNEL_4)),
+ 674                     ; 182 												ADC1_ALIGN_RIGHT);
+ 676  01fd 4b08          	push	#8
+ 677  01ff ae0107        	ldw	x,#263
+ 678  0202 cd0000        	call	_ADC1_ConversionConfig
+ 680  0205 84            	pop	a
+ 681                     ; 184 	ADC1_DataBufferCmd(ENABLE);
+ 683  0206 a601          	ld	a,#1
+ 684  0208 cd0000        	call	_ADC1_DataBufferCmd
+ 686                     ; 186 	ADC1_Cmd(ENABLE);
+ 688  020b a601          	ld	a,#1
+ 689  020d cd0000        	call	_ADC1_Cmd
+ 691                     ; 187 }
+ 694  0210 81            	ret
+ 725                     ; 189 uint32_t ADC1_Read(void)
+ 725                     ; 190 {
+ 726                     	switch	.text
+ 727  0211               _ADC1_Read:
+ 731                     ; 191 	ADC1_DeInit();
+ 733  0211 cd0000        	call	_ADC1_DeInit
+ 735                     ; 193 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS,
+ 735                     ; 194 						 ADC1_CHANNEL_3,
+ 735                     ; 195 						 ADC1_PRESSEL_FCPU_D18,
+ 735                     ; 196 						 ADC1_EXTTRIG_TIM,
+ 735                     ; 197 						 DISABLE,
+ 735                     ; 198 						 ADC1_ALIGN_RIGHT,
+ 735                     ; 199 						 ADC1_SCHMITTTRIG_CHANNEL3,
+ 735                     ; 200 						 DISABLE);
+ 737  0214 4b00          	push	#0
+ 738  0216 4b03          	push	#3
+ 739  0218 4b08          	push	#8
+ 740  021a 4b00          	push	#0
+ 741  021c 4b00          	push	#0
+ 742  021e 4b70          	push	#112
+ 743  0220 ae0103        	ldw	x,#259
+ 744  0223 cd0000        	call	_ADC1_Init
+ 746  0226 5b06          	addw	sp,#6
+ 747                     ; 202 	ADC1_Cmd(ENABLE);
+ 749  0228 a601          	ld	a,#1
+ 750  022a cd0000        	call	_ADC1_Cmd
+ 752                     ; 204 	ADC1_StartConversion();
+ 754  022d cd0000        	call	_ADC1_StartConversion
+ 757  0230               L331:
+ 758                     ; 206 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
+ 760  0230 a680          	ld	a,#128
+ 761  0232 cd0000        	call	_ADC1_GetFlagStatus
+ 763  0235 4d            	tnz	a
+ 764  0236 27f8          	jreq	L331
+ 765                     ; 208 	adc1_value = ADC1_GetConversionValue();
+ 767  0238 cd0000        	call	_ADC1_GetConversionValue
+ 769  023b cd0000        	call	c_uitolx
+ 771  023e ae0004        	ldw	x,#_adc1_value
+ 772  0241 cd0000        	call	c_rtol
+ 774                     ; 210 	ADC1_ClearFlag(ADC1_FLAG_EOC);
+ 776  0244 a680          	ld	a,#128
+ 777  0246 cd0000        	call	_ADC1_ClearFlag
+ 779                     ; 212 	return adc1_value;
+ 781  0249 ae0004        	ldw	x,#_adc1_value
+ 782  024c cd0000        	call	c_ltor
+ 786  024f 81            	ret
+ 817                     ; 215 uint32_t ADC2_Read(void)
+ 817                     ; 216 {
+ 818                     	switch	.text
+ 819  0250               _ADC2_Read:
+ 823                     ; 217 	ADC1_DeInit();
+ 825  0250 cd0000        	call	_ADC1_DeInit
+ 827                     ; 219 	ADC1_Init(ADC1_CONVERSIONMODE_CONTINUOUS,
+ 827                     ; 220 						 ADC1_CHANNEL_4,
+ 827                     ; 221 						 ADC1_PRESSEL_FCPU_D18,
+ 827                     ; 222 						 ADC1_EXTTRIG_TIM,
+ 827                     ; 223 						 DISABLE,
+ 827                     ; 224 						 ADC1_ALIGN_RIGHT,
+ 827                     ; 225 						 ADC1_SCHMITTTRIG_CHANNEL4,
+ 827                     ; 226 						 DISABLE);
+ 829  0253 4b00          	push	#0
+ 830  0255 4b04          	push	#4
+ 831  0257 4b08          	push	#8
+ 832  0259 4b00          	push	#0
+ 833  025b 4b00          	push	#0
+ 834  025d 4b70          	push	#112
+ 835  025f ae0104        	ldw	x,#260
+ 836  0262 cd0000        	call	_ADC1_Init
+ 838  0265 5b06          	addw	sp,#6
+ 839                     ; 228 	ADC1_Cmd(ENABLE);
+ 841  0267 a601          	ld	a,#1
+ 842  0269 cd0000        	call	_ADC1_Cmd
+ 844                     ; 230 	ADC1_StartConversion();
+ 846  026c cd0000        	call	_ADC1_StartConversion
+ 849  026f               L151:
+ 850                     ; 232 	while(ADC1_GetFlagStatus(ADC1_FLAG_EOC) == FALSE);
+ 852  026f a680          	ld	a,#128
+ 853  0271 cd0000        	call	_ADC1_GetFlagStatus
+ 855  0274 4d            	tnz	a
+ 856  0275 27f8          	jreq	L151
+ 857                     ; 234 	adc2_value = ADC1_GetConversionValue();
+ 859  0277 cd0000        	call	_ADC1_GetConversionValue
+ 861  027a cd0000        	call	c_uitolx
+ 863  027d ae0000        	ldw	x,#_adc2_value
+ 864  0280 cd0000        	call	c_rtol
+ 866                     ; 236 	ADC1_ClearFlag(ADC1_FLAG_EOC);
+ 868  0283 a680          	ld	a,#128
+ 869  0285 cd0000        	call	_ADC1_ClearFlag
+ 871                     ; 238 	return adc2_value;
+ 873  0288 ae0000        	ldw	x,#_adc2_value
+ 874  028b cd0000        	call	c_ltor
+ 878  028e 81            	ret
+ 916                     ; 241 uint16_t readAverageADC1(uint8_t samples) {
+ 917                     	switch	.text
+ 918  028f               _readAverageADC1:
+ 920  028f 88            	push	a
+ 921  0290 5204          	subw	sp,#4
+ 922       00000004      OFST:	set	4
+ 925                     ; 243 	for (i = 0; i < samples; i++) {
+ 927  0292 3f11          	clr	_i
+ 929  0294 2011          	jra	L771
+ 930  0296               L371:
+ 931                     ; 244 			sum += ADC1_Read();
+ 933  0296 cd0211        	call	_ADC1_Read
+ 935  0299 ae0007        	ldw	x,#_sum
+ 936  029c cd0000        	call	c_lgadd
+ 938                     ; 245 			Delay_us(200);  // small delay between samples
+ 940  029f ae00c8        	ldw	x,#200
+ 941  02a2 cd00e9        	call	_Delay_us
+ 943                     ; 243 	for (i = 0; i < samples; i++) {
+ 945  02a5 3c11          	inc	_i
+ 946  02a7               L771:
+ 949  02a7 b611          	ld	a,_i
+ 950  02a9 1105          	cp	a,(OFST+1,sp)
+ 951  02ab 25e9          	jrult	L371
+ 952                     ; 247 	return sum / samples;
+ 954  02ad 7b05          	ld	a,(OFST+1,sp)
+ 955  02af b703          	ld	c_lreg+3,a
+ 956  02b1 3f02          	clr	c_lreg+2
+ 957  02b3 3f01          	clr	c_lreg+1
+ 958  02b5 3f00          	clr	c_lreg
+ 959  02b7 96            	ldw	x,sp
+ 960  02b8 1c0001        	addw	x,#OFST-3
+ 961  02bb cd0000        	call	c_rtol
+ 964  02be ae0007        	ldw	x,#_sum
+ 965  02c1 cd0000        	call	c_ltor
+ 967  02c4 96            	ldw	x,sp
+ 968  02c5 1c0001        	addw	x,#OFST-3
+ 969  02c8 cd0000        	call	c_ludv
+ 971  02cb be02          	ldw	x,c_lreg+2
+ 974  02cd 5b05          	addw	sp,#5
+ 975  02cf 81            	ret
+1013                     ; 250 uint16_t readAverageADC2(uint8_t samples) {
+1014                     	switch	.text
+1015  02d0               _readAverageADC2:
+1017  02d0 88            	push	a
+1018  02d1 5204          	subw	sp,#4
+1019       00000004      OFST:	set	4
+1022                     ; 252 	for (i = 0; i < samples; i++) {
+1024  02d3 3f11          	clr	_i
+1026  02d5 2011          	jra	L522
+1027  02d7               L122:
+1028                     ; 253 			sum += ADC2_Read();
+1030  02d7 cd0250        	call	_ADC2_Read
+1032  02da ae0007        	ldw	x,#_sum
+1033  02dd cd0000        	call	c_lgadd
+1035                     ; 254 			Delay_us(200);  // small delay between samples
+1037  02e0 ae00c8        	ldw	x,#200
+1038  02e3 cd00e9        	call	_Delay_us
+1040                     ; 252 	for (i = 0; i < samples; i++) {
+1042  02e6 3c11          	inc	_i
+1043  02e8               L522:
+1046  02e8 b611          	ld	a,_i
+1047  02ea 1105          	cp	a,(OFST+1,sp)
+1048  02ec 25e9          	jrult	L122
+1049                     ; 256 	return sum / samples;
+1051  02ee 7b05          	ld	a,(OFST+1,sp)
+1052  02f0 b703          	ld	c_lreg+3,a
+1053  02f2 3f02          	clr	c_lreg+2
+1054  02f4 3f01          	clr	c_lreg+1
+1055  02f6 3f00          	clr	c_lreg
+1056  02f8 96            	ldw	x,sp
+1057  02f9 1c0001        	addw	x,#OFST-3
+1058  02fc cd0000        	call	c_rtol
+1061  02ff ae0007        	ldw	x,#_sum
+1062  0302 cd0000        	call	c_ltor
+1064  0305 96            	ldw	x,sp
+1065  0306 1c0001        	addw	x,#OFST-3
+1066  0309 cd0000        	call	c_ludv
+1068  030c be02          	ldw	x,c_lreg+2
+1071  030e 5b05          	addw	sp,#5
+1072  0310 81            	ret
+1206                     	xdef	_main
+1207                     	xdef	_readAverageADC2
+1208                     	xdef	_readAverageADC1
+1209                     	xdef	_ADC2_Read
+1210                     	xdef	_ADC1_Read
+1211                     	xdef	_ADC1_setup
+1212                     	xdef	_Timer4_Init
+1213                     	xdef	_CLK_Init
+1214                     	xdef	_GPIO_Int
+1215                     	xdef	_Delay_us
+1216                     	xdef	_Segment_Patterns
+1217                     	switch	.ubsct
+1218  0000               _adc2_value:
+1219  0000 00000000      	ds.b	4
+1220                     	xdef	_adc2_value
+1221  0004               _adc1_value:
+1222  0004 00000000      	ds.b	4
+1223                     	xdef	_adc1_value
+1224  0008               _current:
+1225  0008 00000000      	ds.b	4
+1226                     	xdef	_current
+1227  000c               _voltage:
+1228  000c 00000000      	ds.b	4
+1229                     	xdef	_voltage
+1230  0010               _samples:
+1231  0010 00            	ds.b	1
+1232                     	xdef	_samples
+1233  0011               _i:
+1234  0011 00            	ds.b	1
+1235                     	xdef	_i
+1236                     	xdef	_sum
+1237  0012               _millivolt2:
+1238  0012 00000000      	ds.b	4
+1239                     	xdef	_millivolt2
+1240  0016               _millivolt1:
+1241  0016 00000000      	ds.b	4
+1242                     	xdef	_millivolt1
+1243  001a               _pattern:
+1244  001a 00            	ds.b	1
+1245                     	xdef	_pattern
+1246                     	xdef	_digits
+1247                     	xdef	_currentDigit
+1248                     	xref	_TIM4_ITConfig
+1249                     	xref	_TIM4_Cmd
+1250                     	xref	_TIM4_TimeBaseInit
+1251                     	xref	_TIM4_DeInit
+1252                     	xref	_GPIO_Init
+1253                     	xref	_GPIO_DeInit
+1254                     	xref	_CLK_GetFlagStatus
+1255                     	xref	_CLK_SYSCLKConfig
+1256                     	xref	_CLK_HSIPrescalerConfig
+1257                     	xref	_CLK_ClockSwitchConfig
+1258                     	xref	_CLK_PeripheralClockConfig
+1259                     	xref	_CLK_ClockSwitchCmd
+1260                     	xref	_CLK_LSICmd
+1261                     	xref	_CLK_HSICmd
+1262                     	xref	_CLK_HSECmd
+1263                     	xref	_CLK_DeInit
+1264                     	xref	_ADC1_ClearFlag
+1265                     	xref	_ADC1_GetFlagStatus
+1266                     	xref	_ADC1_GetConversionValue
+1267                     	xref	_ADC1_StartConversion
+1268                     	xref	_ADC1_ConversionConfig
+1269                     	xref	_ADC1_DataBufferCmd
+1270                     	xref	_ADC1_Cmd
+1271                     	xref	_ADC1_Init
+1272                     	xref	_ADC1_DeInit
+1273                     	xref.b	c_lreg
+1274                     	xref.b	c_x
+1294                     	xref	c_lgadd
+1295                     	xref	c_lumd
+1296                     	xref	c_lmul
+1297                     	xref	c_ludv
+1298                     	xref	c_smul
+1299                     	xref	c_ltor
+1300                     	xref	c_rtol
+1301                     	xref	c_uitolx
+1302                     	end

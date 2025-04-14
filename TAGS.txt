@@ -124,8 +124,8 @@ ADC1_PRESSEL_FCPU_D8	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc
 ADC1_PresSel_TypeDef	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_adc1.h	54;"	typedef	typeref:enum:__anon1
 ADC1_PrescalerConfig	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_adc1.h	313;"	prototype	signature:(ADC1_PresSel_TypeDef ADC1_Prescaler)
 ADC1_PrescalerConfig	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src\stm8s_adc1.c	214;"	function	signature:(ADC1_PresSel_TypeDef ADC1_Prescaler)
-ADC1_Read	main.c	190;"	function	signature:(void)
-ADC1_Read	main.c	65;"	prototype	file:	signature:(void)
+ADC1_Read	main.c	189;"	function	signature:(void)
+ADC1_Read	main.c	67;"	prototype	file:	signature:(void)
 ADC1_SCHMITTTRIG_ALL	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_adc1.h	138;"	enumerator	enum:__anon6
 ADC1_SCHMITTTRIG_CHANNEL0	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_adc1.h	126;"	enumerator	enum:__anon6
 ADC1_SCHMITTTRIG_CHANNEL1	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_adc1.h	127;"	enumerator	enum:__anon6
@@ -152,8 +152,8 @@ ADC1_StartConversion	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src
 ADC1_TDRH_RESET_VALUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	348;"	macro
 ADC1_TDRL_RESET_VALUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	347;"	macro
 ADC1_TypeDef	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	338;"	typedef	typeref:struct:ADC1_struct
-ADC1_setup	main.c	159;"	function	signature:(void)
-ADC1_setup	main.c	64;"	prototype	file:	signature:(void)
+ADC1_setup	main.c	158;"	function	signature:(void)
+ADC1_setup	main.c	66;"	prototype	file:	signature:(void)
 ADC1_struct	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	298;"	struct
 ADC2	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2608;"	macro
 ADC2_BaseAddress	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2587;"	macro
@@ -170,8 +170,8 @@ ADC2_CSR_EOC	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h
 ADC2_CSR_EOCIE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	419;"	macro
 ADC2_CSR_RESET_VALUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	406;"	macro
 ADC2_IRQHandler	..\stm8s_stdperiph_lib\project\stm8s_stdperiph_template\stm8s_it.h	108;"	prototype	signature:(void)
-ADC2_Read	main.c	205;"	function	signature:(void)
-ADC2_Read	main.c	66;"	prototype	file:	signature:(void)
+ADC2_Read	main.c	215;"	function	signature:(void)
+ADC2_Read	main.c	68;"	prototype	file:	signature:(void)
 ADC2_TDRH_RESET_VALUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	410;"	macro
 ADC2_TDRL_RESET_VALUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	409;"	macro
 ADC2_TypeDef	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	401;"	typedef	typeref:struct:ADC2_struct
@@ -554,8 +554,8 @@ CLK_ITConfig	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src\stm8s_c
 CLK_IT_CSSD	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_clk.h	167;"	enumerator	enum:__anon26
 CLK_IT_SWIF	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_clk.h	168;"	enumerator	enum:__anon26
 CLK_IT_TypeDef	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_clk.h	169;"	typedef	typeref:enum:__anon26
-CLK_Init	main.c	124;"	function	signature:(void)
-CLK_Init	main.c	62;"	prototype	file:	signature:(void)
+CLK_Init	main.c	123;"	function	signature:(void)
+CLK_Init	main.c	64;"	prototype	file:	signature:(void)
 CLK_LSICmd	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_clk.h	355;"	prototype	signature:(FunctionalState NewState)
 CLK_LSICmd	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src\stm8s_clk.c	166;"	function	signature:(FunctionalState NewState)
 CLK_OUTPUT_CPU	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_clk.h	97;"	enumerator	enum:__anon23
@@ -757,14 +757,14 @@ DRL	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	326;"	me
 DRL	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	397;"	member	struct:ADC2_struct
 DTR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	644;"	member	struct:TIM1_struct
 DUKR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1526;"	member	struct:FLASH_struct
-Delay_us	main.c	102;"	function	signature:(uint16_t nCount)
-Delay_us	main.c	58;"	prototype	file:	signature:(uint16_t nCount)
-Digit1	main.c	31;"	macro	file:
-Digit2	main.c	32;"	macro	file:
-Digit3	main.c	33;"	macro	file:
-Digit4	main.c	35;"	macro	file:
-Digit5	main.c	36;"	macro	file:
-Digit6	main.c	37;"	macro	file:
+Delay_us	main.c	101;"	function	signature:(uint16_t nCount)
+Delay_us	main.c	60;"	prototype	file:	signature:(uint16_t nCount)
+Digit1	main.c	33;"	macro	file:
+Digit2	main.c	34;"	macro	file:
+Digit3	main.c	35;"	macro	file:
+Digit4	main.c	37;"	macro	file:
+Digit5	main.c	38;"	macro	file:
+Digit6	main.c	39;"	macro	file:
 ECKR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	511;"	member	struct:CLK_struct
 EEPROM	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	125;"	macro
 EEPROM	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	131;"	macro
@@ -1024,8 +1024,8 @@ GPIO_ExternalPullUpConfig	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_drive
 GPIO_ExternalPullUpConfig	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src\stm8s_gpio.c	225;"	function	signature:(GPIO_TypeDef* GPIOx, GPIO_Pin_TypeDef GPIO_Pin, FunctionalState NewState)
 GPIO_Init	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_gpio.h	140;"	prototype	signature:(GPIO_TypeDef* GPIOx, GPIO_Pin_TypeDef GPIO_Pin, GPIO_Mode_TypeDef GPIO_Mode)
 GPIO_Init	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\src\stm8s_gpio.c	71;"	function	signature:(GPIO_TypeDef* GPIOx, GPIO_Pin_TypeDef GPIO_Pin, GPIO_Mode_TypeDef GPIO_Mode)
-GPIO_Int	main.c	110;"	function	signature:(void)
-GPIO_Int	main.c	61;"	prototype	file:	signature:(void)
+GPIO_Int	main.c	109;"	function	signature:(void)
+GPIO_Int	main.c	63;"	prototype	file:	signature:(void)
 GPIO_MODE_IN_FL_IT	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_gpio.h	58;"	enumerator	enum:__anon16
 GPIO_MODE_IN_FL_NO_IT	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_gpio.h	56;"	enumerator	enum:__anon16
 GPIO_MODE_IN_PU_IT	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_gpio.h	59;"	enumerator	enum:__anon16
@@ -1570,10 +1570,10 @@ OPT_TypeDef	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	
 OPT_struct	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1584;"	struct
 PCKENR1	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	517;"	member	struct:CLK_struct
 PCKENR2	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	520;"	member	struct:CLK_struct
-PORTA_GPIO_PINS	main.c	55;"	macro	file:
-PORTB_GPIO_PINS	main.c	56;"	macro	file:
-PORTC_GPIO_PINS	main.c	54;"	macro	file:
-PORTD_GPIO_PINS	main.c	53;"	macro	file:
+PORTA_GPIO_PINS	main.c	57;"	macro	file:
+PORTB_GPIO_PINS	main.c	58;"	macro	file:
+PORTC_GPIO_PINS	main.c	56;"	macro	file:
+PORTD_GPIO_PINS	main.c	55;"	macro	file:
 PR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1612;"	member	struct:IWDG_struct
 PSCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1069;"	member	struct:TIM4_struct
 PSCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1137;"	member	struct:TIM5_struct
@@ -1588,19 +1588,19 @@ PSCRL	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	631;"	
 PSR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2183;"	member	struct:__anon33
 PUKR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1524;"	member	struct:FLASH_struct
 Page	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2327;"	member	struct:__anon33	typeref:union:__anon33::__anon34
-PinA	main.c	19;"	macro	file:
-PinB	main.c	20;"	macro	file:
-PinC	main.c	23;"	macro	file:
-PinD	main.c	24;"	macro	file:
-PinE	main.c	25;"	macro	file:
-PinF	main.c	26;"	macro	file:
-PinG	main.c	27;"	macro	file:
+PinA	main.c	21;"	macro	file:
+PinB	main.c	22;"	macro	file:
+PinC	main.c	25;"	macro	file:
+PinD	main.c	26;"	macro	file:
+PinE	main.c	27;"	macro	file:
+PinF	main.c	28;"	macro	file:
+PinG	main.c	29;"	macro	file:
 PointerAttr	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	156;"	macro
 PointerAttr	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	160;"	macro
-PortA	main.c	18;"	macro	file:
-PortB	main.c	34;"	macro	file:
-PortC	main.c	22;"	macro	file:
-PortD	main.c	30;"	macro	file:
+PortA	main.c	20;"	macro	file:
+PortB	main.c	36;"	macro	file:
+PortC	main.c	24;"	macro	file:
+PortD	main.c	32;"	macro	file:
 RCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	634;"	member	struct:TIM1_struct
 RECR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2296;"	member	struct:__anon33::__anon34::__anon40
 RESERVED	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1982;"	member	struct:UART3_struct
@@ -1783,7 +1783,7 @@ SUCCESS	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	238;
 SWCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	515;"	member	struct:CLK_struct
 SWIMCCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	523;"	member	struct:CLK_struct
 SWR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	514;"	member	struct:CLK_struct
-Segment_Patterns	main.c	40;"	variable
+Segment_Patterns	main.c	42;"	variable
 SetBit	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2789;"	macro
 TBR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	444;"	member	struct:AWU_struct
 TDRH	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	327;"	member	struct:ADC1_struct
@@ -2598,8 +2598,8 @@ TRISER	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1343;
 TRUE	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	231;"	enumerator	enum:__anon29
 TSR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2178;"	member	struct:__anon33
 TXCRCR	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	1705;"	member	struct:SPI_struct
-Timer4_Init	main.c	150;"	function	signature:(void)
-Timer4_Init	main.c	63;"	prototype	file:	signature:(void)
+Timer4_Init	main.c	149;"	function	signature:(void)
+Timer4_Init	main.c	65;"	prototype	file:	signature:(void)
 TxMailbox	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2205;"	member	union:__anon33::__anon34	typeref:struct:__anon33::__anon34::__anon35
 U16_MAX	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	243;"	macro
 U32_MAX	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	246;"	macro
@@ -2983,8 +2983,8 @@ __STM8S_WWDG_H	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s
 _stext	..\stm8s_stdperiph_lib\project\stm8s_stdperiph_template\stm8s_it.h	42;"	prototype	signature:(void)
 _stext	stm8_interrupt_vector.c	21;"	prototype	file:
 _vectab	stm8_interrupt_vector.c	23;"	variable
-adc1_value	main.c	12;"	variable
-adc2_value	main.c	12;"	variable
+adc1_value	main.c	16;"	variable
+adc2_value	main.c	17;"	variable
 assert_failed	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_conf.h	105;"	prototype	signature:(uint8_t* file, uint32_t line)
 assert_failed	..\stm8s_stdperiph_lib\project\stm8s_stdperiph_template\stm8s_conf.h	108;"	prototype	signature:(uint8_t* file, uint32_t line)
 assert_param	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_conf.h	103;"	macro
@@ -2992,7 +2992,7 @@ assert_param	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s_c
 assert_param	..\stm8s_stdperiph_lib\project\stm8s_stdperiph_template\stm8s_conf.h	106;"	macro
 assert_param	..\stm8s_stdperiph_lib\project\stm8s_stdperiph_template\stm8s_conf.h	110;"	macro
 bool	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	231;"	typedef	typeref:enum:__anon29
-clearDigits	main.c	59;"	prototype	file:	signature:(void)
+clearDigits	main.c	61;"	prototype	file:	signature:(void)
 counter	main.c	10;"	variable	file:
 current	main.c	15;"	variable
 currentDigit	main.c	8;"	variable
@@ -3000,7 +3000,7 @@ digits	main.c	9;"	variable
 disableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2717;"	macro
 disableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2726;"	macro
 disableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2736;"	macro
-displayDigit	main.c	60;"	prototype	file:	signature:(uint8_t digit, uint8_t value)
+displayDigit	main.c	62;"	prototype	file:	signature:(uint8_t digit, uint8_t value)
 enableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2716;"	macro
 enableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2725;"	macro
 enableInterrupts	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2735;"	macro
@@ -3015,17 +3015,17 @@ interrupt_handler	stm8_interrupt_vector.c	10;"	member	struct:interrupt_vector	fi
 interrupt_handler_t	stm8_interrupt_vector.c	6;"	typedef	file:
 interrupt_instruction	stm8_interrupt_vector.c	9;"	member	struct:interrupt_vector	file:
 interrupt_vector	stm8_interrupt_vector.c	8;"	struct	file:
-main	main.c	70;"	function
+main	main.c	72;"	function
 millivolt1	main.c	12;"	variable
 millivolt2	main.c	12;"	variable
 nop	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2720;"	macro
 nop	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2729;"	macro
 nop	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2739;"	macro
 pattern	main.c	11;"	variable
-readAverageADC1	main.c	220;"	function	signature:(uint8_t samples)
-readAverageADC1	main.c	67;"	prototype	file:	signature:(uint8_t samples)
-readAverageADC2	main.c	229;"	function	signature:(uint8_t samples)
-readAverageADC2	main.c	68;"	prototype	file:	signature:(uint8_t samples)
+readAverageADC1	main.c	241;"	function	signature:(uint8_t samples)
+readAverageADC1	main.c	69;"	prototype	file:	signature:(uint8_t samples)
+readAverageADC2	main.c	250;"	function	signature:(uint8_t samples)
+readAverageADC2	main.c	70;"	prototype	file:	signature:(uint8_t samples)
 rim	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2718;"	macro
 rim	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2727;"	macro
 rim	..\stm8s_stdperiph_lib\libraries\stm8s_stdperiph_driver\inc\stm8s.h	2737;"	macro
