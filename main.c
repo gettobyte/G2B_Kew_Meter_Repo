@@ -80,17 +80,17 @@ main()
 		voltage = readAverageADC1(64);
 		millivolt1 = (voltage * 230L) / 140;
 		sum = 0;
-		current = readAverageADC2(32);
-		millivolt2 = (current * 1000) / 170;
+		current = readAverageADC2(64);
+		//millivolt2 = (current * 1000) / 170;
 		sum = 0;
 		// Convert counter to individual digits
 		digits[0] = ((millivolt1 / 100) % 10);  // Voltage hundreds
 		digits[1] = ((millivolt1 / 10) % 10);   // Voltage tens
 		digits[2] = (millivolt1 % 10);          // Voltage ones
 		
-		digits[3] = ((millivolt2 / 100) % 10);  // Current hundreds
-		digits[4] = ((millivolt2 / 10) % 10);   // Current tens
-		digits[5] = (millivolt2 % 10);          // Current ones
+		digits[3] = ((current / 100) % 10);  // Current hundreds
+		digits[4] = ((current / 10) % 10);   // Current tens
+		digits[5] = (current % 10);          // Current ones
 		
 		
 		Delay_us(100000000);
