@@ -1,0 +1,411 @@
+17:03:22 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+17:03:35 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+17:19:39 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+17:22:24 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+17:23:35 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+11:00:05 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+11:04:39 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+11:05:07 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+11:05:26 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+11:21:42 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16688	     12	   1780	  18480	   4830	test1.elf
+Finished building: default.size.stdout
+ 
+11:24:26 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16484	     12	   1772	  18268	   475c	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+11:31:02 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16504	     12	   1772	  18288	   4770	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+11:39:16 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16508	     12	   1772	  18292	   4774	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:07:44 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16516	     12	   1780	  18308	   4784	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:09:56 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16512	     12	   1772	  18296	   4778	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:11:15 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:18:13 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+12:20:33 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16712	     12	   1780	  18504	   4848	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:23:37 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16712	     12	   1780	  18504	   4848	test1.elf
+Finished building: default.size.stdout
+ 
+12:27:36 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:29:06 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16684	     12	   1780	  18476	   482c	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:31:55 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16620	     12	   1780	  18412	   47ec	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:33:31 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16560	     12	   1780	  18352	   47b0	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:38:24 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16560	     12	   1780	  18352	   47b0	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:45:23 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16676	     12	   1780	  18468	   4824	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:47:11 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:49:07 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16692	     12	   1780	  18484	   4834	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+12:50:06 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+13:08:06 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+13:10:32 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+13:11:29 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+13:14:04 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16700	     12	   1780	  18492	   483c	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+13:15:29 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 
+13:20:48 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-size  test1.elf 
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+13:21:16 **** Incremental Build of configuration Debug for project test1 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: test1.elf
+ 
+arm-none-eabi-size  test1.elf 
+arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
+   text	   data	    bss	    dec	    hex	filename
+  16696	     12	   1780	  18488	   4838	test1.elf
+Finished building: default.size.stdout
+ 
+Finished building: test1.list
+ 

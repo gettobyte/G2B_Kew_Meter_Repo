@@ -1,0 +1,218 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file    stm32g0xx_it.c
+  * @brief   Interrupt Service Routines.
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "stm32g0xx_it.h"
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN TD */
+
+/* USER CODE END TD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN PV */
+const uint8_t Segment_Patterns[10] = {
+	0b10000001,  // 0
+	0b11001111,  // 1
+	0b10010010,  // 2
+	0b10000110,  // 3
+	0b11001100,  // 4
+	0b10100100,  // 5
+	0b10100000,  // 6
+	0b10001111,  // 7
+	0b10000000,  // 8
+	0b10000100   // 9
+};
+
+uint8_t pattern;
+
+unsigned char seg = 0;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/* External variables --------------------------------------------------------*/
+extern TIM_HandleTypeDef htim3;
+/* USER CODE BEGIN EV */
+extern uint8_t digits[6];
+/* USER CODE END EV */
+
+/******************************************************************************/
+/*           Cortex-M0+ Processor Interruption and Exception Handlers          */
+/******************************************************************************/
+/**
+  * @brief This function handles Non maskable interrupt.
+  */
+void NMI_Handler(void)
+{
+  /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
+
+  /* USER CODE END NonMaskableInt_IRQn 0 */
+  /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
+   while (1)
+  {
+  }
+  /* USER CODE END NonMaskableInt_IRQn 1 */
+}
+
+/**
+  * @brief This function handles Hard fault interrupt.
+  */
+void HardFault_Handler(void)
+{
+  /* USER CODE BEGIN HardFault_IRQn 0 */
+
+  /* USER CODE END HardFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    /* USER CODE END W1_HardFault_IRQn 0 */
+  }
+}
+
+/**
+  * @brief This function handles System service call via SWI instruction.
+  */
+void SVC_Handler(void)
+{
+  /* USER CODE BEGIN SVC_IRQn 0 */
+
+  /* USER CODE END SVC_IRQn 0 */
+  /* USER CODE BEGIN SVC_IRQn 1 */
+
+  /* USER CODE END SVC_IRQn 1 */
+}
+
+/**
+  * @brief This function handles Pendable request for system service.
+  */
+void PendSV_Handler(void)
+{
+  /* USER CODE BEGIN PendSV_IRQn 0 */
+
+  /* USER CODE END PendSV_IRQn 0 */
+  /* USER CODE BEGIN PendSV_IRQn 1 */
+
+  /* USER CODE END PendSV_IRQn 1 */
+}
+
+/**
+  * @brief This function handles System tick timer.
+  */
+void SysTick_Handler(void)
+{
+  /* USER CODE BEGIN SysTick_IRQn 0 */
+
+  /* USER CODE END SysTick_IRQn 0 */
+  HAL_IncTick();
+  /* USER CODE BEGIN SysTick_IRQn 1 */
+
+  /* USER CODE END SysTick_IRQn 1 */
+}
+
+/******************************************************************************/
+/* STM32G0xx Peripheral Interrupt Handlers                                    */
+/* Add here the Interrupt Handlers for the used peripherals.                  */
+/* For the available peripheral interrupt handler names,                      */
+/* please refer to the startup file (startup_stm32g0xx.s).                    */
+/******************************************************************************/
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+	// === Get pattern for current digit ===
+	uint8_t val = digits[seg] % 10;  // Avoid invalid index
+	uint8_t pattern = Segment_Patterns[val];
+
+	// === Set segments A-G and DP ===
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, (pattern & 0x40) ? GPIO_PIN_RESET : GPIO_PIN_SET); // A
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, (pattern & 0x20) ? GPIO_PIN_RESET : GPIO_PIN_SET); // B
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, (pattern & 0x10) ? GPIO_PIN_RESET : GPIO_PIN_SET); // C
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, (pattern & 0x08) ? GPIO_PIN_RESET : GPIO_PIN_SET); // D
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, (pattern & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET); // E
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, (pattern & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET); // F
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
+
+//	Handle Dot Point (DP) on PA7
+    if (seg == 2)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // DP ON
+    }
+    else
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);    // DP OFF otherwise
+    }
+
+	// === Enable current digit (active-low) ===
+	switch (seg)
+	{
+		case 0: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET); break;
+		case 1: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET); break;
+		case 2: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); break;
+		case 3: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET); break;
+		case 4: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); break;
+		case 5: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); break;
+	}
+
+	// === Advance to next digit ===
+	seg = (seg + 1) % 6;
+
+  /* USER CODE END TIM3_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim3);
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
+}
+
+/* USER CODE BEGIN 1 */
+
+/* USER CODE END 1 */

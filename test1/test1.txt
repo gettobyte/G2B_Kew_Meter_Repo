@@ -1,0 +1,70 @@
+Configuration	test1
+STM32CubeMX 	6.14.1
+Date	05/15/2025
+MCU	STM32G030K6Tx
+
+
+
+PERIPHERALS	MODES	FUNCTIONS	PINS
+ADC1	IN9	ADC1_IN9	PB1
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+TIM3	Internal Clock	TIM3_VS_ClockSourceINT	VP_TIM3_VS_ClockSourceINT
+TIM3	Output Compare No Output	TIM3_VS_no_output1	VP_TIM3_VS_no_output1
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+7	PA0	GPIO_Output	
+8	PA1	GPIO_Output	
+9	PA2	GPIO_Output	
+10	PA3	GPIO_Output	
+11	PA4	GPIO_Output	
+12	PA5	GPIO_Output	
+13	PA6	GPIO_Output	
+14	PA7	GPIO_Output	
+16	PB1	ADC1_IN9	
+PERIPHERALS	MODES	FUNCTIONS	PINS
+ADC1	IN9	ADC1_IN9	PB1
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+TIM3	Internal Clock	TIM3_VS_ClockSourceINT	VP_TIM3_VS_ClockSourceINT
+TIM3	Output Compare No Output	TIM3_VS_no_output1	VP_TIM3_VS_no_output1
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+7	PA0	GPIO_Output	
+8	PA1	GPIO_Output	
+9	PA2	GPIO_Output	
+10	PA3	GPIO_Output	
+11	PA4	GPIO_Output	
+12	PA5	GPIO_Output	
+13	PA6	GPIO_Output	
+14	PA7	GPIO_Output	
+16	PB1	ADC1_IN9	
+
+
+
+SOFTWARE PROJECT
+
+Project Settings : 
+Project Name : test1
+Project Folder : C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1
+Toolchain / IDE : STM32CubeIDE
+Firmware Package Name and Version : STM32Cube FW_G0 V1.6.2
+
+
+Code Generation Settings : 
+STM32Cube MCU packages and embedded software packs : Copy only the necessary library files
+Generate peripheral initialization as a pair of '.c/.h' files per peripheral : No
+Backup previously generated files when re-generating : No
+Delete previously generated files when not re-generated : Yes
+Set all free pins as analog (to optimize the power consumption) : No
+
+
+Toolchains Settings : 
+Compiler Optimizations : 
+
+
+
+
+
