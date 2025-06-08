@@ -31,7 +31,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SAMPLES 128
+
+#define SAMPLES 255
+
+#define SMOOTHING_SHIFT 3
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,13 +55,19 @@ uint8_t digits[6];
 
 uint32_t lastUpdate = 0;
 
+uint16_t adc_Value= 0;
+
 uint16_t adc_Value_1= 0;
 
 uint16_t adc_Value_2= 0;
 
+uint32_t sum = 0;
+
 uint32_t sum_1 = 0;
 
 uint32_t sum_2 = 0;
+
+uint16_t average = 0;
 
 uint16_t average_1 = 0;
 
@@ -65,9 +75,13 @@ uint16_t average_2 = 0;
 
 uint16_t voltage_mV = 0;
 
+uint16_t corrected = 0;
+
 uint16_t number = 0;
 
-uint16_t deviation, a, b;
+uint16_t deviation, a, b, current_A;
+
+uint16_t filtered_adc = 0;
 
 /* USER CODE END PV */
 
@@ -101,7 +115,7 @@ uint16_t ADC_Convert_Rank1(void)
 	  }
 
 	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, 1);
+	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
 	HAL_ADC_Stop(&hadc1);
 
@@ -223,22 +237,27 @@ int main(void)
 
 	  average_2 = sum_2 / SAMPLES;
 
-	  deviation = ((average_2 - average_1));
+	  deviation = ((average_1 - average_2) * 8);
+
+//	  Apply EMA filtering
+	  filtered_adc = ((filtered_adc * ((1 << SMOOTHING_SHIFT) - 1)) + deviation) >> SMOOTHING_SHIFT;
+
+	  current_A = ((filtered_adc) * 150) / (4095);  // Scale to mV
 
 	  // Show raw value on first 4 digits (pad with zeros)
-	  digits[2] = (average_1 / 1000) % 10;
-	  digits[3] = (average_1 / 100) % 10;
-	  digits[4] = (average_1 / 10) % 10;
-	  digits[5] = average_1 % 10;
-
-	  HAL_Delay(200);
-
-	  // Show raw value on first 4 digits (pad with zeros)
-	  digits[2] = (average_2 / 1000) % 10;
-	  digits[3] = (average_2 / 100) % 10;
-	  digits[4] = (average_2 / 10) % 10;
-	  digits[5] = average_2 % 10;
-
+	  digits[2] = (current_A / 1000) % 10;
+	  digits[3] = (current_A / 100) % 10;
+	  digits[4] = (current_A / 10) % 10;
+	  digits[5] = current_A % 10;
+//
+//	  HAL_Delay(200);
+//
+//	  // Show raw value on first 4 digits (pad with zeros)
+//	  digits[2] = (average_2 / 1000) % 10;
+//	  digits[3] = (average_2 / 100) % 10;
+//	  digits[4] = (average_2 / 10) % 10;
+//	  digits[5] = average_2 % 10;
+//
 	  // Optional: blank last 2 digits
 	  digits[0] = digits[1] = 10;  // Assuming 10 means blank pattern
 
@@ -252,25 +271,30 @@ int main(void)
 //
 //		for (uint8_t i = 0; i < SAMPLES; i++)
 //		{
-//			adc_Value = HAL_ADC_GetValue(&hadc1);
+//			adc_Value = ADC_Convert_Rank1();
 //			sum += adc_Value;
 //		}
 //
 //		average = sum / SAMPLES;
 //
-//		voltage_mV = (average * 200) / 4095;  // Scale to mV
+//		corrected = (average > 0) ? (average - 0) : 0;
+//
+//	    // Apply EMA filtering
+////	    filtered_adc = ((filtered_adc * ((1 << SMOOTHING_SHIFT) - 1)) + corrected) >> SMOOTHING_SHIFT;
+//
+//		voltage_mV = ((corrected) * 3300) / (4095);  // Scale to mV
 //
 //		// Show millivolts as 3.245V → digits: [3][2][4][5]
-//		digits[4] = (voltage_mV / 1000) % 10;  // 3
-//		digits[0] = (voltage_mV / 100) % 10;   // 2
-//		digits[1] = (voltage_mV / 10) % 10;    // 4
-//		digits[2] = voltage_mV % 10;           // 5
-
-		// Optional: enable DP on digit 0 or 1
-		// In TIM callback, check seg==0 or seg==1 and enable DP accordingly
-
+//		digits[2] = (voltage_mV / 1000) % 10;  // 3
+//		digits[3] = (voltage_mV / 100) % 10;   // 2
+//		digits[4] = (voltage_mV / 10) % 10;    // 4
+//		digits[5] = voltage_mV % 10;           // 5
+//
+////		 Optional: enable DP on digit 0 or 1
+////		 In TIM callback, check seg==0 or seg==1 and enable DP accordingly
+//
 //		digits[0] = digits[1] = 10;  // Blank
-		HAL_Delay(150);
+//		HAL_Delay(150);
   }
   /* USER CODE END 3 */
 }
@@ -355,8 +379,8 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_3CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_39CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_39CYCLES_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -378,6 +402,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_8;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();

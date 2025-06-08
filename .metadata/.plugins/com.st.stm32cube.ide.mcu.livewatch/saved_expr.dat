@@ -1,3 +1,8 @@
 average_1
 average_2
 deviation
+voltage_mV
+average
+adc_Value
+filtered_adc
+current_A
