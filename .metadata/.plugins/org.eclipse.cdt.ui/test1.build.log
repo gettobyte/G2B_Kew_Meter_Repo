@@ -1,17 +1,47 @@
-15:23:47 **** Incremental Build of configuration Debug for project test1 ****
+19:35:17 **** Incremental Build of configuration Debug for project test1 ****
 make -j8 all 
 arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'main':
+../Core/Src/main.c:332:17: warning: implicit declaration of function 'sprintf' [-Wimplicit-function-declaration]
+  332 |           len = sprintf(uart_data, "%d\r\n", power);
+      |                 ^~~~~~~
+../Core/Src/main.c:21:1: note: include '<stdio.h>' or provide a declaration of 'sprintf'
+   20 | #include "main.h"
+  +++ |+#include <stdio.h>
+   21 | 
+../Core/Src/main.c:332:17: warning: incompatible implicit declaration of built-in function 'sprintf' [-Wbuiltin-declaration-mismatch]
+  332 |           len = sprintf(uart_data, "%d\r\n", power);
+      |                 ^~~~~~~
+../Core/Src/main.c:332:17: note: include '<stdio.h>' or provide a declaration of 'sprintf'
+../Core/Src/main.c:332:38: warning: format '%d' expects argument of type 'int', but argument 3 has type 'int32_t' {aka 'long int'} [-Wformat=]
+  332 |           len = sprintf(uart_data, "%d\r\n", power);
+      |                                     ~^       ~~~~~
+      |                                      |       |
+      |                                      int     int32_t {aka long int}
+      |                                     %ld
+../Core/Src/main.c:334:38: warning: pointer targets in passing argument 2 of 'HAL_UART_Transmit' differ in signedness [-Wpointer-sign]
+  334 |           HAL_UART_Transmit(&huart1, uart_data, len, HAL_MAX_DELAY);
+      |                                      ^~~~~~~~~
+      |                                      |
+      |                                      char *
+In file included from ../Core/Inc/stm32g0xx_hal_conf.h:319,
+                 from ../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal.h:29,
+                 from ../Core/Inc/main.h:30,
+                 from ../Core/Src/main.c:20:
+../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal_uart.h:1633:79: note: expected 'const uint8_t *' {aka 'const unsigned char *'} but argument is of type 'char *'
+ 1633 | HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size, uint32_t Timeout);
+      |                                                                ~~~~~~~~~~~~~~~^~~~~
 arm-none-eabi-gcc -o "test1.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\test1\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="test1.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 Finished building target: test1.elf
  
 arm-none-eabi-size  test1.elf 
 arm-none-eabi-objdump -h -S test1.elf  > "test1.list"
    text	   data	    bss	    dec	    hex	filename
-  16656	     12	   1788	  18456	   4818	test1.elf
+  22716	     92	   2388	  25196	   626c	test1.elf
 Finished building: default.size.stdout
  
 Finished building: test1.list
  
 
-15:23:48 Build Finished. 0 errors, 0 warnings. (took 1s.12ms)
+19:35:18 Build Finished. 0 errors, 4 warnings. (took 1s.16ms)
 
