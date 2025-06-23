@@ -277,7 +277,7 @@ int main(void)
 //	  Apply EMA filtering
 	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
 
-	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
+	  current_A = ((filtered_adc_1) * 770) / (4095);  // Scale to mV
 //
 //	  // Show raw value on first 4 digits (pad with zeros)
 //	  digits[2] = (current_A / 1000) % 10;

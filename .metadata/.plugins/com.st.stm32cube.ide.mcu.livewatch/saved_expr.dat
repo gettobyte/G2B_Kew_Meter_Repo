@@ -1,8 +1,5 @@
-average_1
-average_2
-deviation
-voltage_mV
-average
-adc_Value
-filtered_adc
+voltage_V
 current_A
+power
+average
+corrected_2

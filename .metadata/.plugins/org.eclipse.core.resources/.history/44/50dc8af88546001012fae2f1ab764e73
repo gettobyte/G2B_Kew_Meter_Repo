@@ -77,17 +77,13 @@ uint16_t average_2 = 0;
 
 uint16_t voltage_V = 0;
 
-int16_t corrected_1 = 0;
-
-int16_t corrected_2 = 0;
+int16_t corrected = 0;
 
 uint16_t number = 0;
 
 int16_t deviation, a, b, current_A;
 
-int16_t filtered_adc_1 = 0;
-
-int16_t filtered_adc_2 = 0;
+int16_t filtered_adc = 0;
 
 int32_t power = 0;
 
@@ -272,12 +268,12 @@ int main(void)
 
 	  deviation = ((average_1 - average_2));
 
-	  corrected_1 = deviation + 4;
+	  corrected = deviation + 4;
 
 //	  Apply EMA filtering
-	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
+	  filtered_adc = ((filtered_adc * ((1 << SMOOTHING_SHIFT) - 1)) + corrected) >> SMOOTHING_SHIFT;
 
-	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
+	  current_A = ((filtered_adc) * 790) / (4095);  // Scale to mV
 //
 //	  // Show raw value on first 4 digits (pad with zeros)
 //	  digits[2] = (current_A / 1000) % 10;
@@ -312,12 +308,12 @@ int main(void)
 
 		average = sum / SAMPLES;
 
-		corrected_2 = (average > 82) ? (average - 82) : 0;
+		corrected = (average > 80) ? (average - 80) : 0;
 
 	    // Apply EMA filtering
-//	    filtered_adc_2 = ((filtered_adc_2 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_2) >> SMOOTHING_SHIFT;
+	    filtered_adc = ((filtered_adc * ((1 << SMOOTHING_SHIFT) - 1)) + corrected) >> SMOOTHING_SHIFT;
 
-		voltage_V = ((corrected_2) * 1000) / (4095);  // Scale to mV
+		voltage_V = ((filtered_adc) * 3300) / (4095);  // Scale to mV
 
 //
 //		// Show millivolts as 3.245V → digits: [3][2][4][5]

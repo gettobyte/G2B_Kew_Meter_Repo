@@ -277,7 +277,7 @@ int main(void)
 //	  Apply EMA filtering
 	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
 
-	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
+	  current_A = ((filtered_adc_1) * 685) / (4095);  // Scale to mV
 //
 //	  // Show raw value on first 4 digits (pad with zeros)
 //	  digits[2] = (current_A / 1000) % 10;
@@ -315,9 +315,9 @@ int main(void)
 		corrected_2 = (average > 82) ? (average - 82) : 0;
 
 	    // Apply EMA filtering
-//	    filtered_adc_2 = ((filtered_adc_2 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_2) >> SMOOTHING_SHIFT;
+	    filtered_adc_2 = ((filtered_adc_2 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_2) >> SMOOTHING_SHIFT;
 
-		voltage_V = ((corrected_2) * 1000) / (4095);  // Scale to mV
+		voltage_V = ((filtered_adc_2) * 1000) / (4095);  // Scale to mV
 
 //
 //		// Show millivolts as 3.245V → digits: [3][2][4][5]
