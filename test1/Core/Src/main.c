@@ -48,12 +48,10 @@ ADC_HandleTypeDef hadc1;
 
 TIM_HandleTypeDef htim3;
 
-UART_HandleTypeDef huart1;
-
 /* USER CODE BEGIN PV */
 HAL_StatusTypeDef status;
 
-uint8_t digits[6];
+uint8_t digits[7];
 
 uint32_t lastUpdate = 0;
 
@@ -76,6 +74,8 @@ uint16_t average_1 = 0;
 uint16_t average_2 = 0;
 
 uint16_t voltage_V = 0;
+
+uint16_t voltage = 0;
 
 int16_t corrected_1 = 0;
 
@@ -101,7 +101,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
-static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 void updateDigits(uint32_t value)
@@ -118,7 +117,7 @@ uint16_t ADC_Convert_Rank1(void)
 {
 	ADC_ChannelConfTypeDef sConfig = {0};
 
-	  sConfig.Channel = ADC_CHANNEL_0;
+	  sConfig.Channel = ADC_CHANNEL_1;
 	  sConfig.Rank = ADC_REGULAR_RANK_1;
 	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
 	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -135,26 +134,6 @@ uint16_t ADC_Convert_Rank1(void)
 }
 
 uint16_t ADC_Convert_Rank2(void)
-{
-	ADC_ChannelConfTypeDef sConfig = {0};
-
-	  sConfig.Channel = ADC_CHANNEL_1;
-	  sConfig.Rank = ADC_REGULAR_RANK_1;
-	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, 1);
-	adc_Value_2= HAL_ADC_GetValue(&hadc1);
-	HAL_ADC_Stop(&hadc1);
-
-	return adc_Value_2;
-}
-
-uint16_t ADC_Convert_Rank3(void)
 {
 	ADC_ChannelConfTypeDef sConfig = {0};
 
@@ -212,7 +191,6 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_TIM3_Init();
-  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   status = HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
@@ -237,47 +215,47 @@ int main(void)
 //		  updateDigits(number);  // Update display data
 //	  }
 
-//	  sum = 0;
-//
-//	  for (uint8_t i = 0; i < SAMPLES; i++)
-//	  {
-//		  adc_Value = HAL_ADC_GetValue(&hadc1);
-//		  sum += adc_Value;
-//	  }
-//
-//	  average = sum / SAMPLES;
-//
-//	  voltage = (average * 3245) / 4095;
-//
-//	  HAL_Delay(100);
+	  sum = 0;
+
+	  for (uint8_t i = 0; i < SAMPLES; i++)
+	  {
+		  adc_Value = ADC_Convert_Rank2();
+		  sum += adc_Value;
+	  }
+
+	  average = sum / SAMPLES;
+
+	  voltage = (average * 100) / 4095;
+
+	  HAL_Delay(10);
 
 	  // === Case 1: Show raw 12-bit ADC value (0–4095) ===
 	  // Comment this block when testing voltage
 
-	  sum_1 = 0;
-	  sum_2 = 0;
-
-	  for (uint8_t i = 0; i < SAMPLES; i++)
-	  {
-		  a = ADC_Convert_Rank1();
-		  b = ADC_Convert_Rank2();
-
-		  sum_1 += a;
-		  sum_2 += b;
-	  }
-
-	  average_1 = sum_1 / SAMPLES;
-
-	  average_2 = sum_2 / SAMPLES;
-
-	  deviation = ((average_1 - average_2));
-
-	  corrected_1 = deviation + 4;
-
-//	  Apply EMA filtering
-	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
-
-	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
+//	  sum_1 = 0;
+//	  sum_2 = 0;
+//
+//	  for (uint8_t i = 0; i < SAMPLES; i++)
+//	  {
+//		  a = ADC_Convert_Rank1();
+//		  b = ADC_Convert_Rank2();
+//
+//		  sum_1 += a;
+//		  sum_2 += b;
+//	  }
+//
+//	  average_1 = sum_1 / SAMPLES;
+//
+//	  average_2 = sum_2 / SAMPLES;
+//
+//	  deviation = ((average_1 - average_2));
+//
+//	  corrected_1 = deviation + 4;
+//
+////	  Apply EMA filtering
+//	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
+//
+//	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
 //
 //	  // Show raw value on first 4 digits (pad with zeros)
 //	  digits[2] = (current_A / 1000) % 10;
@@ -294,30 +272,30 @@ int main(void)
 //	  digits[5] = average_2 % 10;
 //
 	  // Optional: blank last 2 digits
-	  digits[0] = digits[1] = 10;  // Assuming 10 means blank pattern
-
-	  HAL_Delay(10);
+//	  digits[0] = digits[1] = 10;  // Assuming 10 means blank pattern
+//
+//	  HAL_Delay(10);
 
 
 	  // === Case 2: Show voltage (e.g., 3.245 V = 3245 mV) ===
 	  // Comment this block when testing raw ADC value
 
-		sum = 0;
-
-		for (uint8_t i = 0; i < SAMPLES; i++)
-		{
-			adc_Value = ADC_Convert_Rank3();
-			sum += adc_Value;
-		}
-
-		average = sum / SAMPLES;
-
-		corrected_2 = (average > 82) ? (average - 82) : 0;
+//		sum = 0;
+//
+//		for (uint8_t i = 0; i < SAMPLES; i++)
+//		{
+//			adc_Value = ADC_Convert_Rank3();
+//			sum += adc_Value;
+//		}
+//
+//		average = sum / SAMPLES;
+//
+//		corrected_2 = (average > 82) ? (average - 82) : 0;
 
 	    // Apply EMA filtering
 //	    filtered_adc_2 = ((filtered_adc_2 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_2) >> SMOOTHING_SHIFT;
 
-		voltage_V = ((corrected_2) * 1000) / (4095);  // Scale to mV
+//		voltage_V = ((corrected_2) * 1000) / (4095);  // Scale to mV
 
 //
 //		// Show millivolts as 3.245V → digits: [3][2][4][5]
@@ -330,13 +308,9 @@ int main(void)
 ////		 In TIM callback, check seg==0 or seg==1 and enable DP accordingly
 //
 //		digits[0] = digits[1] = 10;  // Blank
-		HAL_Delay(10);
+//		HAL_Delay(10);
 
-		power = voltage_V * current_A;
-
-	  len = sprintf(uart_data, "%d\r\n", power);
-
-	  HAL_UART_Transmit(&huart1, uart_data, len, HAL_MAX_DELAY);
+//		power = voltage_V * current_A;
   }
   /* USER CODE END 3 */
 }
@@ -415,14 +389,14 @@ static void MX_ADC1_Init(void)
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 3;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DiscontinuousConvMode = ENABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_39CYCLES_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_39CYCLES_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -432,7 +406,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -442,18 +416,8 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_1;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Regular Channel
-  */
   sConfig.Channel = ADC_CHANNEL_2;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_2;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -523,66 +487,63 @@ static void MX_TIM3_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, C_D3_Pin|C_D2_Pin|F_Pin|A_Pin
+                          |C_D1_Pin|E_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, C_D4_Pin|B_Pin|V_D2_Pin|D_Pin
+                          |DP_Pin|C_Pin|G_Pin|V_D4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(V_D1_GPIO_Port, V_D1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : C_D3_Pin C_D2_Pin F_Pin A_Pin
+                           C_D1_Pin E_Pin */
+  GPIO_InitStruct.Pin = C_D3_Pin|C_D2_Pin|F_Pin|A_Pin
+                          |C_D1_Pin|E_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : C_D4_Pin B_Pin V_D2_Pin D_Pin
+                           DP_Pin C_Pin G_Pin V_D4_Pin */
+  GPIO_InitStruct.Pin = C_D4_Pin|B_Pin|V_D2_Pin|D_Pin
+                          |DP_Pin|C_Pin|G_Pin|V_D4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : V_D1_Pin */
+  GPIO_InitStruct.Pin = V_D1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(V_D1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Switch2_Pin Switch1_Pin */
+  GPIO_InitStruct.Pin = Switch2_Pin|Switch1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

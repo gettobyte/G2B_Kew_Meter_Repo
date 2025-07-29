@@ -161,50 +161,51 @@ void SysTick_Handler(void)
 void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
-
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 
 	// === Get pattern for current digit ===
 	uint8_t val = digits[seg] % 10;  // Avoid invalid index
 	uint8_t pattern = Segment_Patterns[val];
 
 	// === Set segments A-G and DP ===
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, (pattern & 0x40) ? GPIO_PIN_RESET : GPIO_PIN_SET); // A
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, (pattern & 0x20) ? GPIO_PIN_RESET : GPIO_PIN_SET); // B
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, (pattern & 0x10) ? GPIO_PIN_RESET : GPIO_PIN_SET); // C
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, (pattern & 0x08) ? GPIO_PIN_RESET : GPIO_PIN_SET); // D
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, (pattern & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET); // E
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, (pattern & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET); // F
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (pattern & 0x40) ? GPIO_PIN_RESET : GPIO_PIN_SET); // A
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (pattern & 0x20) ? GPIO_PIN_RESET : GPIO_PIN_SET); // B
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, (pattern & 0x10) ? GPIO_PIN_RESET : GPIO_PIN_SET); // C
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, (pattern & 0x08) ? GPIO_PIN_RESET : GPIO_PIN_SET); // D
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, (pattern & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET); // E
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, (pattern & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET); // F
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
 
 //	Handle Dot Point (DP) on PA7
     if (seg == 0)
     {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);  // DP ON
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);  // DP ON
     }
     else
     {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);    // DP OFF otherwise
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);    // DP OFF otherwise
     }
 
 	// === Enable current digit (active-low) ===
 	switch (seg)
 	{
-		case 0: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET); break;
-		case 1: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET); break;
-		case 2: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); break;
-		case 3: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET); break;
-		case 4: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); break;
-		case 5: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); break;
+		case 0: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET); break;
+		case 1: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET); break;
+		case 2: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET); break;
+		case 3: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET); break;
+		case 4: HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET); break;
+		case 5: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET); break;
+		case 6: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); break;
 	}
 
 	// === Advance to next digit ===
-	seg = (seg + 1) % 6;
+	seg = (seg + 1) % 7;
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
