@@ -67,7 +67,7 @@ uint32_t sum_1 = 0;
 
 uint32_t sum_2 = 0;
 
-uint16_t average = 0;
+float average = 0;
 
 uint16_t average_1 = 0;
 
@@ -75,9 +75,9 @@ uint16_t average_2 = 0;
 
 uint16_t voltage_V = 0;
 
-uint16_t voltage = 0;
+float voltage = 0;
 
-int16_t corrected_1 = 0;
+float corrected_1 = 0;
 
 int16_t corrected_2 = 0;
 
@@ -94,6 +94,12 @@ int32_t power = 0;
 char uart_data[100];
 
 uint32_t len;
+
+const float alpha = 0.2f;
+
+float ema_current = 0;
+
+float test;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -225,7 +231,18 @@ int main(void)
 
 	  average = sum / SAMPLES;
 
-	  voltage = (average * 100) / 4095;
+	  corrected_1 = (average > 69) ? (average - 69) : 0;
+
+//	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
+
+	  ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
+
+	  voltage = ((((corrected_1 * 3300.0) / 4096.0) / 50.0) / 0.000375);
+
+//	  digits[1] = (voltage / 1000) % 10;  // 3
+//	  digits[0] = (voltage / 100) % 10;   // 2
+//	  digits[1] = (voltage / 10) % 10;    // 4
+//	  digits[2] = voltage % 10;           // 5
 
 	  HAL_Delay(10);
 

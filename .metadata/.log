@@ -2632,3 +2632,51 @@ org.eclipse.core.runtime.CoreException: Setup exceptions
 	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
 !SUBENTRY 1 com.st.stm32cube.ide.mcu.debug.launch 4 0 2025-07-28 14:30:27.259
 !MESSAGE Setup exceptions
+!SESSION 2025-07-30 11:55:52.698 -----------------------------------------------
+eclipse.buildId=Version 1.18.1
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_IN
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2025-07-30 11:56:09.369
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2025-07-30 11:56:09.369
+!MESSAGE Log4j2 initialized with config file C:\Users\singh\STM32CubeIDE\workspace_1.18.1\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2025-07-30 11:56:23.165
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY org.eclipse.equinox.p2.touchpoint.natives 2 0 2025-07-30 13:09:15.592
+!MESSAGE Could not remove temporary backup directory (it is safe to manually delete it and its contents): C:\Users\singh\AppData\Local\Temp\STM32CubeIDE_1ec39ede-f1ae-42c1-938c-f4903fec1ff0
+!SESSION 2025-07-30 13:09:20.882 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_IN
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 -data file:/C:/Users/singh/STM32CubeIDE/workspace_1.18.1/
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2025-07-30 13:09:30.244
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2025-07-30 13:09:30.246
+!MESSAGE Log4j2 initialized with config file C:\Users\singh\STM32CubeIDE\workspace_1.18.1\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2025-07-30 13:09:41.045
+!MESSAGE Started RMI Server, listening on port 41337
+!SESSION 2025-07-30 15:42:54.198 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_IN
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2025-07-30 15:43:10.330
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2025-07-30 15:43:10.330
+!MESSAGE Log4j2 initialized with config file C:\Users\singh\STM32CubeIDE\workspace_1.18.1\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2025-07-30 15:43:23.502
+!MESSAGE Started RMI Server, listening on port 41337

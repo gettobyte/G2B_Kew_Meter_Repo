@@ -183,7 +183,7 @@ void TIM3_IRQHandler(void)
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
 
 //	Handle Dot Point (DP) on PA7
-    if (seg == 0)
+    if (seg == 2)
     {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);  // DP ON
     }
