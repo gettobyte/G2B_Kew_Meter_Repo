@@ -41,18 +41,51 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-const uint8_t Segment_Patterns[10] = {
-	0b10000001,  // 0
-	0b11001111,  // 1
-	0b10010010,  // 2
-	0b10000110,  // 3
-	0b11001100,  // 4
-	0b10100100,  // 5
-	0b10100000,  // 6
-	0b10001111,  // 7
-	0b10000000,  // 8
-	0b10000100   // 9
+const uint8_t Segment_Patterns[38] = {
+    0b10000001,  // 0   [0]
+    0b11001111,  // 1   [1]
+    0b10010010,  // 2   [2]
+    0b10000110,  // 3   [3]
+    0b11001100,  // 4   [4]
+    0b10100100,  // 5   [5]
+    0b10100000,  // 6   [6]
+    0b10001111,  // 7   [7]
+    0b10000000,  // 8   [8]
+    0b10000100,  // 9   [9]
+
+    0b10001000,  // A   [10]
+    0b11100000,  // B   [11] (b in lowercase form)
+	0b10110001,  // C   [12]
+    0b11000010,  // D   [13] (d in lowercase form)
+    0b10110000,  // E   [14]
+    0b10111000,  // F   [15]
+    0b10100000,  // G   [16] (same as 6)
+    0b11101000,  // H   [17]
+    0b11110001,  // I   [18] (looks like a vertical bar)
+    0b11000111,  // J   [19]
+    0b10001001,  // K   [20] (approximated)
+    0b11100001,  // L   [21]
+    0b10001010,  // M   [22] (approximated)
+	0b11101010,  // n   [23] (approximated)
+    0b10000001,  // O   [24]
+    0b10011000,  // P   [25]
+    0b10001100,  // Q   [26] (approximated)
+    0b11111010,  // R   [27] (approximated)
+    0b10100100,  // S   [28]
+    0b11110000,  // T   [29] (like E)
+    0b11000001,  // U   [30]
+    0b11000101,  // V   [31] (approximated)
+    0b11010101,  // W   [32] (approximated)
+    0b10011010,  // X   [33] (approximated)
+    0b11000100,  // Y   [34] (like 4)
+    0b10010010,  // Z   [35] (like 2)
+
+    0b11111110,  // -   [36]
+    0b11111111,  // space [37]
+    0b11111110   // ?   [38]
 };
+
+
 
 uint8_t pattern;
 
@@ -161,17 +194,20 @@ void SysTick_Handler(void)
 void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10,GPIO_PIN_SET); //A
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET); //B
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET); //C
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET); //D
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET); //E
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET); //F
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET); //G
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10,GPIO_PIN_SET); // Digit 0
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET); // Digit 1
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET); // Digit 2
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET); // Digit 3
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET); // Digit 4
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET); // Digit 5
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET); // newly added GPIO
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET); // Digit 6
+
+	//common anode, SET = off for digits
 
 
 	// === Get pattern for current digit ===
-	uint8_t val = digits[seg] % 10;  // Avoid invalid index
+	uint8_t val = digits[seg];  // Avoid invalid index
 	uint8_t pattern = Segment_Patterns[val];
 
 	// === Set segments A-G and DP ===
@@ -182,8 +218,8 @@ void TIM3_IRQHandler(void)
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, (pattern & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET); //E
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, (pattern & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET); // F
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
-
-
+//
+//
 //	Handle Dot Point (DP) on PA7
     if (seg == 9)
     {
@@ -193,21 +229,24 @@ void TIM3_IRQHandler(void)
     {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);    // DP OFF otherwise
     }
-
-	// === Enable current digit (active-low) ===
+//
+//	// === Enable current digit (active-low) ===
 	switch (seg)
 	{
+	    //This turns ON digits
 		case 0: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10,GPIO_PIN_RESET); break;
 		case 1: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET); break;
 		case 2: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET); break;
 		case 3: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET); break;
 		case 4: HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET); break;
 		case 5: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET); break;
-		case 6: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); break;
+		case 6: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET); break;
+		case 7: HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET); break;
 	}
-
-	// === Advance to next digit ===
-	seg = (seg + 1) % 7;
+//
+//	// === Advance to next digit ===
+	seg = (seg + 1) % 8;
+//	  HAL_Delay(10);
 
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);

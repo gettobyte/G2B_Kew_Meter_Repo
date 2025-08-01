@@ -42,6 +42,8 @@
 #define BUTTON2_Pin GPIO_PIN_11
 #define BUTTON2_GPIO_Port GPIOA
 
+GPIO_PinState b2;
+GPIO_PinState b1;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,8 +65,28 @@ uint32_t buttonPressStartTime = 0;
 uint8_t waitingFor2Sec = 0;
 uint8_t inPasswordMode = 0;
 
-uint8_t passwordDigits[4] = {0, 0, 0, 0}; // 0000
+//uint8_t passwordDigits[4] = {0, 0, 0, 0}; // 0000
 uint8_t currentDigitIndex = 0;
+
+uint8_t passwordDigits[4] = {0, 0, 0, 0};
+const uint8_t defaultPassword[4] = { 1,2,3,4 };
+
+uint8_t correctPassword[4] = {1, 0, 0, 0};
+uint8_t passwordEntered[4] = {0};
+uint8_t settingDigits[4] = {0};
+uint8_t mode = 0;
+uint8_t entryComplete = 0;
+uint8_t passwordMatched = 0;
+uint32_t lastPress = 0, blinkTimer = 0;
+uint8_t blinkState = 0;
+uint8_t modeEntryActive = 0;
+
+uint8_t modeSettings[5][4] = {0};     // Buffer for each mode's 4-digit values
+uint8_t editMode = 0;                 // Are we editing digits?
+
+
+
+
 
 
 /* USER CODE END PV */
@@ -75,58 +97,6 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-
-// Segment bits: 0b0GFEDCBA (MSB = unused / DP)
-uint8_t charTo7Seg(char c)
-{
-    switch (c)
-    {
-        case '0': return 0b00111111; // A B C D E F
-        case '1': return 0b00000110; // B C
-        case '2': return 0b01011011; // A B D E G
-        case '3': return 0b01001111; // A B C D G
-        case '4': return 0b01100110; // B C F G
-        case '5': return 0b01101101; // A C D F G
-        case '6': return 0b01111101; // A C D E F G
-        case '7': return 0b00000111; // A B C
-        case '8': return 0b01111111; // All
-        case '9': return 0b01101111; // A B C D F G
-        case 'A': return 0b01110111; // A B C E F G
-        case 'b': return 0b01111100; // C D E F G
-        case 'C': return 0b00111001; // A D E F
-        case 'd': return 0b01011110; // B C D E G
-        case 'E': return 0b10000110; // A D E F G
-        case 'F': return 0b01110001; // A E F G
-        case 'H': return 0b01110110; // B C E F G
-        case 'L': return 0b00111000; // D E F
-        case 'O': return 0b00111111; // A B C D E F
-        case 'P': return 0b01110011; // A B E F G
-        case 'S': return 0b01101101; // A C D F G
-        case 'U': return 0b00111110; // B C D E F
-        case 'K': return 0b01110110; // custom for K
-        case 'W': return 0b00111110; // like U
-        case '-': return 0b01000000; // G
-        case ' ': return 0b00000000;
-        default:  return 0b00000001; // Just A (shows top segment if unknown)
-    }
-}
-
-
-
-void displayPasswordScreen()
-{
-    // Show digits at upper 4 (0-3)
-    for (int i = 0; i < 4; i++)
-        digits[i] = passwordDigits[i];
-
-    // Show "PASS" at lower 4 (4-7)
-    digits[4] = charTo7Seg('P');
-    digits[5] = charTo7Seg('A');
-    digits[6] = charTo7Seg('S');
-    digits[7] = charTo7Seg('S');
-}
-
-
 
 
 /* USER CODE END PFP */
@@ -151,6 +121,8 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
+  HAL_SYSCFG_DisableRemap(SYSCFG_REMAP_PA11 | SYSCFG_REMAP_PA12);
 
   /* USER CODE BEGIN Init */
 
@@ -181,84 +153,230 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+	  GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+	     GPIO_PinState b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
 
-	    digits[0] = charTo7Seg('H');
-	    digits[1] = charTo7Seg('E');
-	    digits[2] = charTo7Seg('L');
-	    digits[3] = charTo7Seg('L');
+	     // Step 1: Long-press BOTH BUTTONS to enter password mode
 
-	    digits[4] = charTo7Seg('O');
-	    digits[5] = charTo7Seg('F');
-	    digits[6] = charTo7Seg('F');
-	    //digits[7] = charTo7Seg('K');
+	     if (!inPasswordMode)
+	     {
+	         if (b1 == GPIO_PIN_RESET && b2 == GPIO_PIN_RESET)
+	         {
+	             if (waitingFor2Sec == 0)
+	             {
+	                 buttonPressStartTime = HAL_GetTick();
+	                 waitingFor2Sec = 1;
+	             }
+	             else if (HAL_GetTick() - buttonPressStartTime >= 2000)
+	             {
 
-//	  GPIO_PinState b1 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_12); // Button 1
-//	  GPIO_PinState b2 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_11); // Button 2
-//
-//	      if (!inPasswordMode)
-//	      {
-//	          // Entry Condition: both buttons pressed for 2s
-//	          if (b1 == GPIO_PIN_SET && b2 == GPIO_PIN_SET)
-//	          {
-//	              if (waitingFor2Sec == 0)
-//	              {
-//	                  buttonPressStartTime = HAL_GetTick();
-//	                  waitingFor2Sec = 1;
-//	              }
-//	              else if (HAL_GetTick() - buttonPressStartTime >= 2000)
-//	              {
-//	                  // ✅ Enter password mode
-//	                  inPasswordMode = 1;
-//	                  waitingFor2Sec = 0;
-//	                  currentDigitIndex = 0;
-//	                  displayPasswordScreen();
-//	              }
-//	          }
-//	          else
-//	          {
-//	              waitingFor2Sec = 0;
-//	          }
-//	      }
-//	      else
-//	      {
-//	          // Password Mode Active
-//	          displayPasswordScreen();
-//
-//	          // Example debounce (basic)
-//	          static uint32_t lastPress = 0;
-//	          if (HAL_GetTick() - lastPress > 300)
-//	          {
-//	              if (b1 == GPIO_PIN_SET)
-//	              {
-//	                  // Increment current digit
-//	                  passwordDigits[currentDigitIndex]++;
-//	                  if (passwordDigits[currentDigitIndex] > 9)
-//	                      passwordDigits[currentDigitIndex] = 0;
-//	                  lastPress = HAL_GetTick();
-//	              }
-//	              if (b2 == GPIO_PIN_SET)
-//	              {
-//	                  // Move to next digit
-//	                  currentDigitIndex++;
-//	                  if (currentDigitIndex >= 4)
-//	                  {
-//	                      // ✅ You can now compare entered password here
-//	                      // Reset if needed
-//	                      currentDigitIndex = 0;
-//	                  }
-//	                  lastPress = HAL_GetTick();
-//	              }
-//	          }
-//	      }
-//	  if (HAL_GetTick() - lastUpdate >= 10)
-//	  {
-//		  lastUpdate = HAL_GetTick();
-//
-//		  number++;
-//		  if (number > 99999999) number = 0;  // Wrap around after 8 digits
-//
-//		  updateDigits(number);  // Update display data
-//	  }
+	                 inPasswordMode = 1;
+	                 waitingFor2Sec = 0;
+	                 currentDigitIndex = 0;
+	                 entryComplete = 0;
+
+	                 // Show "PASS"
+	                 digits[4] = 25; // P
+	                 digits[5] = 10; // A
+	                 digits[6] = 28; // S
+	                 digits[7] = 28; // S
+
+	                 for (int i = 0; i < 4; i++) {
+	                     digits[i] = 0;
+	                     passwordEntered[i] = 0;
+	                 }
+	             }
+	         }
+	         else
+	         {
+	             waitingFor2Sec = 0;
+	         }
+	     }
+
+	     // Step 2: Enter password mode
+
+	     else if (!modeEntryActive)
+	     {
+
+	         // Blinking selected digit
+	         if (!entryComplete && HAL_GetTick() - blinkTimer >= 300)
+	         {
+	             blinkTimer = HAL_GetTick();
+	             blinkState = !blinkState;
+	             digits[currentDigitIndex] = blinkState ? 37 : passwordEntered[currentDigitIndex]; // 37 = blank
+	         }
+
+	         if (!entryComplete && HAL_GetTick() - lastPress > 300)
+	         {
+
+	             if (b1 == GPIO_PIN_RESET)
+	             {
+	                 passwordEntered[currentDigitIndex]++;
+	                 if (passwordEntered[currentDigitIndex] > 9) passwordEntered[currentDigitIndex] = 0;
+	                 digits[currentDigitIndex] = passwordEntered[currentDigitIndex];
+	                 lastPress = HAL_GetTick();
+	             }
+	             else if (b2 == GPIO_PIN_RESET)
+	             {
+	                 digits[currentDigitIndex] = passwordEntered[currentDigitIndex];
+	                 currentDigitIndex++;
+	                 if (currentDigitIndex >= 4)
+	                 {
+	                     entryComplete = 1;
+
+	                     // Compare password
+	                     passwordMatched = 1;
+	                     for (int i = 0; i < 4; i++)
+	                     {
+	                         if (passwordEntered[i] != correctPassword[i])
+	                         {
+	                             passwordMatched = 0;
+	                             break;
+	                         }
+	                     }
+
+	                     digits[4] = 14; // E
+	                     digits[5] = 23; // n
+	                     digits[6] = 36; // -
+	                     digits[7] = passwordMatched ? 34 : 23; // y : n
+
+	                     if (!passwordMatched)
+	                     {
+	                         while (1); // stay here forever
+	                     }
+
+	                     // if matched, go to config mode
+	                     HAL_Delay(1000);
+	                     modeEntryActive = 1;
+	                     currentDigitIndex = 0;
+	                     mode = 0;
+	                     for (int i = 0; i < 4; i++) settingDigits[i] = 0;
+	                 }
+	                 lastPress = HAL_GetTick();
+	             }
+	         }
+	     }
+
+	     // Step 3: Configuration mode (if password matched)
+	     else
+	     {
+	         const uint8_t modeLabels[5][4] = {
+	             {28, 17, 23, 29}, // SHnt
+	             {13, 30, 1, 13},  // du1d
+	             {11, 30, 10, 13}, // bUAd
+	             {25, 10, 27, 29}, // PArt
+	             {28, 10, 30, 14}  // SAVE
+	         };
+
+	         // Show current mode name in digits 4–7
+	         for (int i = 0; i < 4; i++)
+	             digits[4 + i] = modeLabels[mode][i];
+
+	         // === Show upper digits ===
+	         if (editMode)
+	         {
+	             // Blink current digit
+	             if (HAL_GetTick() - blinkTimer >= 300)
+	             {
+	                 blinkTimer = HAL_GetTick();
+	                 blinkState = !blinkState;
+	                 digits[currentDigitIndex] = blinkState ? 37 : settingDigits[currentDigitIndex];  // 37 = blank
+	             }
+	         }
+	         else
+	         {
+	             // Not in edit mode → show digits normally
+	             for (int i = 0; i < 4; i++)
+	                 digits[i] = settingDigits[i];
+	         }
+
+	         // === Handle Button Inputs ===
+	         if (HAL_GetTick() - lastPress > 300)
+	         {
+	             if (b1 == GPIO_PIN_RESET)
+	             {
+	                 if (!editMode)
+	                 {
+	                     // Save current mode settings before switching
+	                     for (int i = 0; i < 4; i++)
+	                         modeSettings[mode][i] = settingDigits[i];
+
+	                     // Switch to next mode (cyclic)
+	                     mode = (mode + 1) % 5;
+
+	                     // Load values from buffer
+	                     for (int i = 0; i < 4; i++)
+	                         settingDigits[i] = modeSettings[mode][i];
+
+	                     currentDigitIndex = 0;
+	                 }
+	                 else
+	                 {
+	                     // In edit mode — increment current digit
+	                     if (mode < 4)
+	                     {
+	                         settingDigits[currentDigitIndex]++;
+	                         if (settingDigits[currentDigitIndex] > 9)
+	                             settingDigits[currentDigitIndex] = 0;
+
+	                         digits[currentDigitIndex] = settingDigits[currentDigitIndex];
+	                     }
+	                     else
+	                     {
+	                         // Mode 4 = SAVE
+	                         settingDigits[0] = (settingDigits[0] == 34) ? 23 : 34;  // y ↔ n
+	                         digits[0] = settingDigits[0];
+
+	                         if (settingDigits[0] == 34)
+	                         {
+	                             // Save settings permanently (already stored in modeSettings)
+	                             // Add EEPROM write here if needed
+	                         }
+	                         else
+	                         {
+	                             while (1); // If user selects "n", halt
+	                         }
+	                     }
+	                 }
+
+	                 lastPress = HAL_GetTick();
+	             }
+
+	             else if (b2 == GPIO_PIN_RESET)
+	             {
+	                 if (!editMode)
+	                 {
+	                     editMode = 1;
+	                     currentDigitIndex = 0;
+	                 }
+	                 else
+	                 {
+	                     if (mode < 4)
+	                     {
+	                         digits[currentDigitIndex] = settingDigits[currentDigitIndex];
+	                         currentDigitIndex++;
+	                         if (currentDigitIndex >= 4)
+	                         {
+	                             currentDigitIndex = 0;
+	                             editMode = 0;
+	                         }
+	                     }
+	                     else
+	                     {
+	                         // Mode 4 = SAVE: toggle y/n
+	                         settingDigits[0] = (settingDigits[0] == 34) ? 23 : 34;
+	                         digits[0] = settingDigits[0];
+	                     }
+	                 }
+
+	                 lastPress = HAL_GetTick();
+	             }
+	         }
+	     }
+
+
+
+
 
 //	  sum = 0;
 //
