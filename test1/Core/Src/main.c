@@ -81,13 +81,68 @@ uint32_t lastPress = 0, blinkTimer = 0;
 uint8_t blinkState = 0;
 uint8_t modeEntryActive = 0;
 
-uint8_t modeSettings[5][4] = {0};     // Buffer for each mode's 4-digit values
 uint8_t editMode = 0;                 // Are we editing digits?
 
 
+uint8_t readOnlyMode = 0;
+
+// if password doesnt match
+
+uint8_t settingValues[5][4] = {
+    {0, 0, 0, 0}, // SHnt
+    {0, 0, 0, 0}, // du1d
+    {0, 0, 0, 0}, // bUAd
+    {0, 0, 0, 0}, // PArt
+    {34, 0, 0, 0} // SAVE (y by default in [0])
+};
+
+const uint8_t modeLabels[5][4] = {
+        {28, 17, 23, 29}, // SHnt
+        {13, 30, 1, 13},  // du1d
+        {11, 30, 10, 13}, // bUAd
+        {25, 10, 27, 29}, // PArt
+        {28, 10, 30, 14}  // SAVE
+    };
+
+// if password is correct
+
+uint8_t modeSettings[5][4] = {
+    {0, 7, 5, 9}, // Default SHnt
+    {0, 0, 0, 0}, // Default du1d
+    {9, 6, 0, 0}, // Default bUAd
+    {14, 30, 14, 23}, // Default: EVEn (E, V, E, n)
+    {34, 14, 5, 37}  // Default SAVE: y
+};
+
+uint8_t partModes[3][4] = {
+    {14, 30, 14, 23}, // EVEn
+    {0, 13, 13, 37}, // odd
+    {23, 24, 23, 37}  // non
+};
+
+uint8_t saveModes[2][4] = {
+    {34, 14, 5, 37}, // YES
+    {23, 24, 37, 37}, // NO
+};
+
+const uint8_t baudModes[4][4] = {
+    {9, 6, 0, 0},   // 9600
+    {4, 8, 0, 0},   // 4800
+    {2, 4, 0, 0},   // 2400
+    {1, 9, 2, 0}    // 1920
+};
+uint8_t baudModeIndex = 0;
 
 
+// Set default values for modes (unless in edit)
+//if (!editMode && mode == 0) memcpy(settingDigits, (uint8_t[]){0, 7, 5, 9}, 4);
+//if (!editMode && mode == 2) memcpy(settingDigits, (uint8_t[]){9, 6, 0, 0}, 4);
 
+uint8_t modeEditBlink = 0; // Used in Mode 3 (PArt) and Mode 4 (SAVE)
+
+int partModeIndex = 0;
+int saveToggle = 0; // 0 = EVEn, 1 = odd
+int programming = 0;
 
 /* USER CODE END PV */
 
@@ -153,10 +208,10 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+	     GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
 	     GPIO_PinState b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
 
-	     // Step 1: Long-press BOTH BUTTONS to enter password mode
+// =============== Step 1: Long-press BOTH BUTTONS to enter password mode =============== //
 
 	     if (!inPasswordMode)
 	     {
@@ -170,7 +225,7 @@ int main(void)
 	             else if (HAL_GetTick() - buttonPressStartTime >= 2000)
 	             {
 
-	                 inPasswordMode = 1;
+	            	 inPasswordMode = 1;
 	                 waitingFor2Sec = 0;
 	                 currentDigitIndex = 0;
 	                 entryComplete = 0;
@@ -193,7 +248,7 @@ int main(void)
 	         }
 	     }
 
-	     // Step 2: Enter password mode
+// =============== Step 2: Enter password mode =============== //
 
 	     else if (!modeEntryActive)
 	     {
@@ -218,7 +273,7 @@ int main(void)
 	             }
 	             else if (b2 == GPIO_PIN_RESET)
 	             {
-	                 digits[currentDigitIndex] = passwordEntered[currentDigitIndex];
+	                 digits[currentDigitIndex] = 36;
 	                 currentDigitIndex++;
 	                 if (currentDigitIndex >= 4)
 	                 {
@@ -233,125 +288,229 @@ int main(void)
 	                             passwordMatched = 0;
 	                             break;
 	                         }
+
+	                         if (passwordEntered[i] == correctPassword[i])
+	                         {
+	                        	 programming = 1;
+	                             modeEntryActive = 1;
+	                         }
 	                     }
 
-	                     digits[4] = 14; // E
-	                     digits[5] = 23; // n
-	                     digits[6] = 36; // -
-	                     digits[7] = passwordMatched ? 34 : 23; // y : n
+	                     digits[0] = 14; // E
+	                     digits[1] = 23; // n
+	                     digits[2] = 36; // -
+	                     digits[3] = passwordMatched ? 34 : 23; // y : n
+	                     while(1)
+	                     {
+	                    	 GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+	                    	 if(b1 == GPIO_PIN_RESET){
+	                    		 break;
+	                    	 }
+	                     }
+//                           HAL_Delay(1000);
+
 
 	                     if (!passwordMatched)
 	                     {
-	                         while (1); // stay here forever
+	                         readOnlyMode = 1;
+	                         mode = 0;
+	                         currentDigitIndex = 0;
+	                         blinkState = 0;
+	                         blinkTimer = HAL_GetTick();
+
+	                         const uint8_t defaultShnt[4] = {0, 7, 5, 9};
+	                         const uint8_t defaultDuid[4] = {0, 0, 0, 0};
+
+	                         int localMode = 0; // Tracks what to show: 0 → SHnt, 1 → du1d, 2 → reset
+
+	                         while (1)
+	                         {
+	                             // Show SHnt
+	                             if (localMode == 0)
+	                             {
+	                                 for (int j = 0; j < 4; j++)
+	                                 {
+	                                     digits[j] = defaultShnt[j];
+	                                     digits[4 + j] = modeLabels[0][j];
+	                                 }
+	                             }
+	                             // Show du1d
+	                             while(1)
+	                            	                     {
+	                            	                    	 GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+	                            	                    	 if(b1 == GPIO_PIN_RESET){
+	                            	                    		 break;
+	                            	                    	 }
+	                            	                     }
+	                            if (localMode == 1)
+	                             {
+	                                 for (int j = 0; j < 4; j++)
+	                                 {
+	                                     digits[j] = defaultDuid[j];
+	                                     digits[4 + j] = modeLabels[1][j];
+	                                 }
+	                             }
+
+
+	                             // Reset system after du1d
+	                             else if (localMode == 2)
+	                             {
+	                                 // === Reset system ===
+	                                 memcpy(settingDigits, defaultShnt, 4); // SHnt
+	                                 memcpy(settingDigits, baudModes[baudModeIndex], 4); // bUAd
+
+	                                 // Fully reset all state flags
+	                                 inPasswordMode = 0;
+	                                 modeEntryActive = 0;
+	                                 entryComplete = 0;
+	                                 waitingFor2Sec = 0;
+	                                 currentDigitIndex = 0;
+	                                 readOnlyMode = 0;
+	                                 programming = 0;
+	                                 editMode = 0;
+	                                 blinkState = 0;
+
+	                                 // Clear screen
+	                                 for (int i = 0; i < 8; i++) digits[i] = 0;
+
+	                                 HAL_Delay(300);
+
+	                                 // === Add this: exit wrong password loop ===
+	                                 break;
+	                             }
+
+	                             // Handle button 1 to cycle modes
+	                             if (HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin) == GPIO_PIN_RESET)
+	                             {
+	                                 HAL_Delay(300); // debounce
+	                                 localMode++;
+	                                 if (localMode > 2)
+	                                     localMode = 2;
+	                             }
+	                         }
+	                         inPasswordMode = 0;
+	                         programming=0;
+	                         modeEntryActive = 0;
+
 	                     }
 
+
+
 	                     // if matched, go to config mode
-	                     HAL_Delay(1000);
-	                     modeEntryActive = 1;
+
+
 	                     currentDigitIndex = 0;
 	                     mode = 0;
 	                     for (int i = 0; i < 4; i++) settingDigits[i] = 0;
+
 	                 }
 	                 lastPress = HAL_GetTick();
+
 	             }
 	         }
 	     }
 
-	     // Step 3: Configuration mode (if password matched)
-	     else
-	     {
-	         const uint8_t modeLabels[5][4] = {
-	             {28, 17, 23, 29}, // SHnt
-	             {13, 30, 1, 13},  // du1d
-	             {11, 30, 10, 13}, // bUAd
-	             {25, 10, 27, 29}, // PArt
-	             {28, 10, 30, 14}  // SAVE
-	         };
+// ===============Step 3: Configuration mode (if password matched)========= //
 
-	         // Show current mode name in digits 4–7
+	     else if (programming == 1)
+	     {
+	         // === SET DEFAULTS ===
+	         if (!editMode && mode == 0) memcpy(settingDigits, (uint8_t[]){0, 7, 5, 9}, 4); // SHnt
+	         if (!editMode && mode == 2) memcpy(settingDigits, baudModes[baudModeIndex], 4); // bUAd
+
+	         // === MODE LABEL DISPLAY (digits 4–7) ===
 	         for (int i = 0; i < 4; i++)
 	             digits[4 + i] = modeLabels[mode][i];
 
-	         // === Show upper digits ===
-	         if (editMode)
+	         // === DISPLAY UPPER DIGITS ===
+	         if ((mode == 2 || mode == 3 || mode == 4) && editMode)
 	         {
-	             // Blink current digit
+	             // Controlled blinking while editing
 	             if (HAL_GetTick() - blinkTimer >= 300)
 	             {
 	                 blinkTimer = HAL_GetTick();
 	                 blinkState = !blinkState;
-	                 digits[currentDigitIndex] = blinkState ? 37 : settingDigits[currentDigitIndex];  // 37 = blank
+	                 for (int i = 0; i < 4; i++)
+	                     digits[i] = blinkState ? 37 : settingDigits[i];
 	             }
 	         }
 	         else
 	         {
-	             // Not in edit mode → show digits normally
+	             // Normal display
 	             for (int i = 0; i < 4; i++)
 	                 digits[i] = settingDigits[i];
 	         }
 
-	         // === Handle Button Inputs ===
+	         // === BUTTON HANDLING ===
 	         if (HAL_GetTick() - lastPress > 300)
 	         {
+	             // BUTTON 1 → Change value or switch mode
 	             if (b1 == GPIO_PIN_RESET)
 	             {
-	                 if (!editMode)
+	                 if ((mode == 2 || mode == 3 || mode == 4) && editMode)
 	                 {
-	                     // Save current mode settings before switching
-	                     for (int i = 0; i < 4; i++)
-	                         modeSettings[mode][i] = settingDigits[i];
-
-	                     // Switch to next mode (cyclic)
-	                     mode = (mode + 1) % 5;
-
-	                     // Load values from buffer
-	                     for (int i = 0; i < 4; i++)
-	                         settingDigits[i] = modeSettings[mode][i];
-
-	                     currentDigitIndex = 0;
+	                     // --- In EDIT MODE ---
+	                     if (mode == 2)  // bUAd
+	                     {
+	                         baudModeIndex = (baudModeIndex + 1) % 4;
+	                         memcpy(settingDigits, baudModes[baudModeIndex], 4);
+	                     }
+	                     else if (mode == 3)  // PArt
+	                     {
+	                         partModeIndex = (partModeIndex + 1) % 3;
+	                         memcpy(settingDigits, partModes[partModeIndex], 4);
+	                     }
+	                     else if (mode == 4)  // SAVE
+	                     {
+	                         saveToggle = !saveToggle;
+	                         memcpy(settingDigits, saveModes[saveToggle], 4);
+	                     }
 	                 }
 	                 else
 	                 {
-	                     // In edit mode — increment current digit
-	                     if (mode < 4)
-	                     {
-	                         settingDigits[currentDigitIndex]++;
-	                         if (settingDigits[currentDigitIndex] > 9)
-	                             settingDigits[currentDigitIndex] = 0;
+	                     // --- NORMAL MODE SWITCHING ---
+	                     // Save current settings
+	                     for (int i = 0; i < 4; i++)
+	                         modeSettings[mode][i] = settingDigits[i];
 
-	                         digits[currentDigitIndex] = settingDigits[currentDigitIndex];
-	                     }
-	                     else
-	                     {
-	                         // Mode 4 = SAVE
-	                         settingDigits[0] = (settingDigits[0] == 34) ? 23 : 34;  // y ↔ n
-	                         digits[0] = settingDigits[0];
+	                     // Switch to next mode (looped)
+	                     mode = (mode + 1) % 5;
 
-	                         if (settingDigits[0] == 34)
-	                         {
-	                             // Save settings permanently (already stored in modeSettings)
-	                             // Add EEPROM write here if needed
-	                         }
-	                         else
-	                         {
-	                             while (1); // If user selects "n", halt
-	                         }
-	                     }
+	                     // Load settings for new mode
+	                     for (int i = 0; i < 4; i++)
+	                         settingDigits[i] = modeSettings[mode][i];
+
+	                     editMode = 0;
+	                     currentDigitIndex = 0;
 	                 }
 
 	                 lastPress = HAL_GetTick();
 	             }
 
+	             // BUTTON 2 → Enter or exit edit mode (blink)
 	             else if (b2 == GPIO_PIN_RESET)
 	             {
-	                 if (!editMode)
+	                 if (mode == 2 || mode == 3 || mode == 4)
 	                 {
-	                     editMode = 1;
-	                     currentDigitIndex = 0;
+	                     editMode = !editMode;
+	                     blinkTimer = HAL_GetTick();
+
+	                     // Save when exiting editMode
+	                     if (!editMode)
+	                     {
+	                         for (int i = 0; i < 4; i++)
+	                             modeSettings[mode][i] = settingDigits[i];
+	                     }
 	                 }
 	                 else
 	                 {
-	                     if (mode < 4)
+	                     // For SHnt/du1d: allow normal digit editing if needed
+	                     if (!editMode)
+	                     {
+	                         editMode = 1;
+	                         currentDigitIndex = 0;
+	                     }
+	                     else
 	                     {
 	                         digits[currentDigitIndex] = settingDigits[currentDigitIndex];
 	                         currentDigitIndex++;
@@ -361,21 +520,12 @@ int main(void)
 	                             editMode = 0;
 	                         }
 	                     }
-	                     else
-	                     {
-	                         // Mode 4 = SAVE: toggle y/n
-	                         settingDigits[0] = (settingDigits[0] == 34) ? 23 : 34;
-	                         digits[0] = settingDigits[0];
-	                     }
 	                 }
 
 	                 lastPress = HAL_GetTick();
 	             }
 	         }
 	     }
-
-
-
 
 
 //	  sum = 0;

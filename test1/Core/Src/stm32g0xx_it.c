@@ -67,7 +67,7 @@ const uint8_t Segment_Patterns[38] = {
     0b11100001,  // L   [21]
     0b10001010,  // M   [22] (approximated)
 	0b11101010,  // n   [23] (approximated)
-    0b10000001,  // O   [24]
+    0b11100010,  // lower O   [24]
     0b10011000,  // P   [25]
     0b10001100,  // Q   [26] (approximated)
     0b11111010,  // R   [27] (approximated)
@@ -82,7 +82,7 @@ const uint8_t Segment_Patterns[38] = {
 
     0b11111110,  // -   [36]
     0b11111111,  // space [37]
-    0b11111110   // ?   [38]
+    0b11100010   // ?   [38]
 };
 
 
