@@ -230,6 +230,7 @@ int main(void)
 	                 currentDigitIndex = 0;
 	                 entryComplete = 0;
 
+
 	                 // Show "PASS"
 	                 digits[4] = 25; // P
 	                 digits[5] = 10; // A
