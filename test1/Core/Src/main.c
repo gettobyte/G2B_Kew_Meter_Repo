@@ -152,7 +152,7 @@ uint16_t ADC_Convert_Rank2(void)
 	  }
 
 	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, 1);
+	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 	adc_Value_2= HAL_ADC_GetValue(&hadc1);
 	HAL_ADC_Stop(&hadc1);
 
@@ -231,13 +231,13 @@ int main(void)
 
 	  average = sum / SAMPLES;
 
-	  corrected_1 = (average > 69) ? (average - 69) : 0;
+	  corrected_1 = (average > 62) ? (average - 62) : 0;
 
 //	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
 
 	  ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
 
-	  voltage = ((((corrected_1 * 3300.0) / 4096.0) / 50.0) / 0.000375);
+	  voltage = ((corrected_1 * 200.0) / 4095.0);
 
 //	  digits[1] = (voltage / 1000) % 10;  // 3
 //	  digits[0] = (voltage / 100) % 10;   // 2
