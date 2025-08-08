@@ -86,6 +86,43 @@ uint8_t editMode = 0;                 // Are we editing digits?
 
 uint8_t readOnlyMode = 0;
 
+uint16_t adc_Value= 0;
+
+uint16_t adc_Value_1= 0;
+
+uint16_t adc_Value_2= 0;
+
+uint32_t sum = 0;
+
+uint32_t sum_1 = 0;
+
+uint32_t sum_2 = 0;
+
+float average = 0;
+
+uint16_t average_1 = 0;
+
+uint16_t average_2 = 0;
+
+uint16_t voltage_V = 0;
+
+float voltage = 0;
+
+float corrected_1 = 0;
+
+int16_t corrected_2 = 0;
+
+uint16_t number = 0;
+
+int16_t deviation, a, b, current_A;
+
+int16_t filtered_adc_1 = 0;
+
+
+const float alpha = 0.2f;
+
+float ema_current = 0;
+
 // if password doesnt match
 
 uint8_t settingValues[5][4] = {
@@ -153,12 +190,30 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
+uint16_t ADC_Convert(void)
+{
+	ADC_ChannelConfTypeDef sConfig = {0};
+
+	  sConfig.Channel = ADC_CHANNEL_2;
+	  sConfig.Rank = ADC_REGULAR_RANK_1;
+	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+
+	status = HAL_ADC_Start(&hadc1);
+	status = HAL_ADC_PollForConversion(&hadc1, 1);
+	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
+	HAL_ADC_Stop(&hadc1);
+
+	return adc_Value_1;
+}
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -529,102 +584,24 @@ int main(void)
 	     }
 
 
-//	  sum = 0;
-//
-//	  for (uint8_t i = 0; i < SAMPLES; i++)
-//	  {
-//		  adc_Value = ADC_Convert_Rank2();
-//		  sum += adc_Value;
-//	  }
-//
-//	  average = sum / SAMPLES;
-//
-//	  voltage = (average * 100) / 4095;
-//
-//	  HAL_Delay(10);
+		  sum = 0;
 
-	  // === Case 1: Show raw 12-bit ADC value (0–4095) ===
-	  // Comment this block when testing voltage
+		  for (uint8_t i = 0; i < SAMPLES; i++)
+		  {
+			  adc_Value = ADC_Convert();
+			  sum += adc_Value;
+		  }
 
-//	  sum_1 = 0;
-//	  sum_2 = 0;
-//
-//	  for (uint8_t i = 0; i < SAMPLES; i++)
-//	  {
-//		  a = ADC_Convert_Rank1();
-//		  b = ADC_Convert_Rank2();
-//
-//		  sum_1 += a;
-//		  sum_2 += b;
-//	  }
-//
-//	  average_1 = sum_1 / SAMPLES;
-//
-//	  average_2 = sum_2 / SAMPLES;
-//
-//	  deviation = ((average_1 - average_2));
-//
-//	  corrected_1 = deviation + 4;
-//
-////	  Apply EMA filtering
-//	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
-//
-//	  current_A = ((filtered_adc_1) * 1075) / (4095);  // Scale to mV
-//
-//	  // Show raw value on first 4 digits (pad with zeros)
-//	  digits[2] = (current_A / 1000) % 10;
-//	  digits[3] = (current_A / 100) % 10;
-//	  digits[4] = (current_A / 10) % 10;
-//	  digits[5] = current_A % 10;
-//
-//	  HAL_Delay(200);
-//
-//	  // Show raw value on first 4 digits (pad with zeros)
-//	  digits[2] = (average_2 / 1000) % 10;
-//	  digits[3] = (average_2 / 100) % 10;
-//	  digits[4] = (average_2 / 10) % 10;
-//	  digits[5] = average_2 % 10;
-//
-	  // Optional: blank last 2 digits
-//	  digits[0] = digits[1] = 10;  // Assuming 10 means blank pattern
-//
-//	  HAL_Delay(10);
+		  average = sum / SAMPLES;
 
+		  corrected_1 = (average > 0) ? (average - 0) : 0;
 
-	  // === Case 2: Show voltage (e.g., 3.245 V = 3245 mV) ===
-	  // Comment this block when testing raw ADC value
+	//	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
 
-//		sum = 0;
-//
-//		for (uint8_t i = 0; i < SAMPLES; i++)
-//		{
-//			adc_Value = ADC_Convert_Rank3();
-//			sum += adc_Value;
-//		}
-//
-//		average = sum / SAMPLES;
-//
-//		corrected_2 = (average > 82) ? (average - 82) : 0;
+		  ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
 
-	    // Apply EMA filtering
-//	    filtered_adc_2 = ((filtered_adc_2 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_2) >> SMOOTHING_SHIFT;
+		  voltage = ((((ema_current * 3300.0) / 4096.0) / 50.0) / 0.000375);
 
-//		voltage_V = ((corrected_2) * 1000) / (4095);  // Scale to mV
-
-//
-//		// Show millivolts as 3.245V → digits: [3][2][4][5]
-//		digits[2] = (voltage_mV / 1000) % 10;  // 3
-//		digits[3] = (voltage_mV / 100) % 10;   // 2
-//		digits[4] = (voltage_mV / 10) % 10;    // 4
-//		digits[5] = voltage_mV % 10;           // 5
-//
-////		 Optional: enable DP on digit 0 or 1
-////		 In TIM callback, check seg==0 or seg==1 and enable DP accordingly
-//
-//		digits[0] = digits[1] = 10;  // Blank
-//		HAL_Delay(10);
-
-//		power = voltage_V * current_A;
   }
   /* USER CODE END 3 */
 }
