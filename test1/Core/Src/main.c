@@ -42,12 +42,12 @@
 #define BUTTON2_Pin GPIO_PIN_11
 #define BUTTON2_GPIO_Port GPIOA
 
-//#define SAMPLES              200     // More samples for stability
-#define alpha                0.05f   // Smoothing factor
-#define OFFSET_ADC_VAL       61      // Offset (at 0 A)
+
+#define alpha                0.02f   // Smoothing factor
+#define OFFSET_ADC_VAL       62.0f      // Offset (at 0 A)
 #define ADC_REF_VOLTAGE     3300.0f  // mV
 #define ADC_RESOLUTION      4095.0f
-#define AMPLIFIER_GAIN         50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
+#define AMPLIFIER_GAIN       50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
 #define SHUNT_RESISTANCE    0.000375f // Ohms
 
 
@@ -75,7 +75,7 @@ uint32_t buttonPressStartTime = 0;
 uint8_t waitingFor2Sec = 0;
 uint8_t inPasswordMode = 0;
 
-//uint8_t passwordDigits[4] = {0, 0, 0, 0}; // 0000
+
 uint8_t currentDigitIndex = 0;
 
 uint8_t passwordDigits[4] = {0, 0, 0, 0};
@@ -127,9 +127,14 @@ int16_t deviation, a, b, current_A;
 
 int16_t filtered_adc_1 = 0;
 
-
+int val_int;
 
 float ema_current = 0;
+
+float offset_correction;
+float gain_correction;
+float v_shunt;
+float v_out;
 
 // if password doesnt match
 
@@ -211,7 +216,7 @@ uint16_t ADC_Convert(void)
 	  }
 
 	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, 1);
+	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
 	HAL_ADC_Stop(&hadc1);
 
@@ -240,7 +245,6 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  HAL_SYSCFG_DisableRemap(SYSCFG_REMAP_PA11 | SYSCFG_REMAP_PA12);
 
   /* USER CODE BEGIN Init */
 
@@ -296,8 +300,6 @@ int main(void)
 	                 waitingFor2Sec = 0;
 	                 currentDigitIndex = 0;
 
-
-
 	                 // Show "PASS"
 	                 digits[4] = 25; // P
 	                 digits[5] = 10; // A
@@ -315,6 +317,92 @@ int main(void)
 	         else
 	         {
 	             waitingFor2Sec = 0;
+
+	             sum = 0;
+
+	             for (uint8_t i = 0; i < SAMPLES; i++)
+	             {
+	                 adc_Value = ADC_Convert();   // ADC reading
+	                 sum += adc_Value;
+	             }
+
+	             average = sum / SAMPLES;
+
+	             // Offset correction
+	             corrected_1 = (average > OFFSET_ADC_VAL) ? (average - OFFSET_ADC_VAL) : 0;
+
+	             // Apply Exponential Moving Average
+	             ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
+
+	             // Step 1: Convert ADC to voltage
+	             v_out = (ema_current * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
+
+	             // Step 2: Reverse amplifier gain to get shunt voltage
+	             v_shunt = v_out / AMPLIFIER_GAIN; // mV
+
+	             // Step 3: Calculate current using Ohm's Law (I = V / R)
+	             voltage = v_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
+
+	             // Step 4: Apply calibration to correct gain error (based on your measurements)
+	             gain_correction = 0.91f;   // Adjust this based on your observed error
+	             offset_correction = -0.02f; // Optional fine offset if needed
+
+	             voltage = voltage * gain_correction + offset_correction;
+
+	             // Step 5: Round to 1 decimal place
+	             voltage = ((int)(voltage * 10 + 0.5)) / 10.0f;
+
+	    	     // === Step 9: Clamp and Prepare Current ===
+	    	     if (voltage > 200.0f) voltage = 200.0f;
+	    	     if (voltage < 0.0f) voltage = 0.0f;
+
+	    	     // === Step 10: Clear Digits & DPs ===
+	    	     for (int i = 0; i < 4; i++) {
+	    	         digits[i] = 0;
+	    	         digits[8 + i] = 0;
+	    	     }
+
+
+
+	    	     // === Step 11: Extract digits + Set DP ===
+	    	     if (voltage < 10.0f)
+	    	     {
+	    	         // Format: X.XX (e.g. 2.34 → 2 3 4)
+	    	         val_int = (int)(voltage * 1000 + 0.5f);  // e.g. 2.34 → 234
+
+	    	         digits[0] = (val_int / 1000) % 10;
+	    			 digits[1] = (val_int / 100) % 10;
+	    			 digits[2] = (val_int / 10) % 10;
+	    			 digits[3] =  val_int % 10;
+	    	         digits[8] = 1;  // DP after first digit (X.XX)
+	    	     }
+	    	     else if (voltage < 100.0f)
+	    	     {
+	    	         // Format: XX.X (e.g. 23.4 → 2 3 4)
+	    	         val_int = (int)(voltage * 100 + 0.5f);  // e.g. 23.4 → 234
+
+	    	         digits[0] = (val_int / 1000) % 10;
+	    			 digits[1] = (val_int / 100) % 10;
+	    			 digits[2] = (val_int / 10) % 10;
+	    			 digits[3] =  val_int % 10;
+
+	    	         digits[9] = 1;  // DP after second digit (XX.X)
+	    	     }
+	    	     else
+	    	     {
+	    	         // Format: XXX. (e.g. 123.0 → 1 2 3)
+	    	         val_int = (int)(voltage * 10 + 0.5f);  //
+
+	    	         digits[0] = (val_int / 1000) % 10;
+	    	         digits[1] = (val_int / 100) % 10;
+	    	         digits[2] = (val_int / 10) % 10;
+	    	         digits[3] =  val_int % 10;
+
+
+	    	         digits[10] = 1;  // DP after third digit (XXX.)
+	    	     }
+
+
 	         }
 	     }
 
@@ -593,17 +681,15 @@ int main(void)
 
 	   	                	if (mode == 0)
 	   	                	{
-	   	                	    digits[8] = 0;
-	   	                	    digits[9] = 0;
+
 	   	                	    digits[10] = 1;
-	   	                	    digits[11] = 0;
+
 	   	                	}
 	   	                	else
 	   	                	{
-	   	                	    digits[8] = 0;
-	   	                	    digits[9] = 0;
+
 	   	                	    digits[10] = 0;
-	   	                	    digits[11] = 0;
+
 	   	                	}
 	   	                     // Automatically enter editMode in SAVE mode
 	   	                     if (mode == 4)
@@ -737,107 +823,9 @@ int main(void)
 	   	         }
 	   	     }
 
-//		  sum = 0;
-//
-//		  for (uint8_t i = 0; i < SAMPLES; i++)
-//		  {
-//			  adc_Value = ADC_Convert();
-//			  sum += adc_Value;
-//		  }
-//
-//		  average = sum / SAMPLES;
-//
-//		  corrected_1 = (average > 61) ? (average - 61) : 0;
-//
-//	//	  filtered_adc_1 = ((filtered_adc_1 * ((1 << SMOOTHING_SHIFT) - 1)) + corrected_1) >> SMOOTHING_SHIFT;
-//
-//		  ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
-//
-//		  voltage = ((((ema_current * 3300.0) / 4095.0) / 50.0) / 0.000375);
+////////////////////////////////////////////////////////////////////////////
 
-//	     sum = 0;
-//
-//	     for (uint8_t i = 0; i < SAMPLES; i++)
-//	     {
-//	         adc_Value = ADC_Convert();   // ADC reading
-//	         sum += adc_Value;
-//	     }
-//
-//	     average = sum / SAMPLES;
-//
-//	     // Offset correction
-//	     corrected_1 = (average > OFFSET_ADC_VAL) ? (average - OFFSET_ADC_VAL) : 0;
-//
-//	     // Apply Exponential Moving Average
-//	     ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
-//
-//	     // Step 1: Convert ADC to voltage
-//	     float v_out = (ema_current * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
-//
-//	     // Step 2: Reverse amplifier gain to get shunt voltage
-//	     float v_shunt = v_out / AMPLIFIER_GAIN; // mV
-//
-//	     // Step 3: Calculate current using Ohm's Law (I = V / R)
-//	     voltage = v_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
-//
-//	     // Step 4: Apply calibration to correct gain error (based on your measurements)
-//	     float gain_correction = 0.97f;   // Adjust this based on your observed error
-//	     float offset_correction = -0.02f; // Optional fine offset if needed
-//
-//	     voltage = voltage * gain_correction + offset_correction;
-//
-//	     // Step 5: Round to 1 decimal place
-//	     voltage = ((int)(voltage * 10 + 0.5)) / 10.0f;
-//
-//	     // === Step 9: Clamp and Prepare Current ===
-//	     if (voltage > 200.0f) voltage = 200.0f;
-//	     if (voltage < 0.0f) voltage = 0.0f;
-//
-//	     // === Step 10: Clear Digits & DPs ===
-//	     for (int i = 0; i < 4; i++) {
-//	         digits[i] = 0;
-//	         digits[8 + i] = 0;
-//	     }
-//
-//	     int val_int;
-//
-//	     // === Step 11: Extract digits + Set DP ===
-//	     if (voltage < 10.0f)
-//	     {
-//	         // Format: X.XX (e.g. 2.34 → 2 3 4)
-//	         val_int = (int)(voltage * 100 + 0.5f);  // e.g. 2.34 → 234
-//
-//	         digits[0] = (val_int / 1000) % 10;
-//	        	         digits[1] = (val_int / 100) % 10;
-//	        	         digits[2] = (val_int / 10) % 10;
-//	        	         digits[3] = val_int % 10;
-//	        // digits[9] = 1;  // DP after first digit (X.XX)
-//	     }
-//	     else if (voltage < 100.0f)
-//	     {
-//	         // Format: XX.X (e.g. 23.4 → 2 3 4)
-//	         val_int = (int)(voltage * 10 + 0.5f);  // e.g. 23.4 → 234
-//
-//	         digits[0] = (val_int / 1000) % 10;
-//	        	         digits[1] = (val_int / 100) % 10;
-//	        	         digits[2] = (val_int / 10) % 10;
-//	        	         digits[3] = val_int % 10;
-//
-//	         digits[10] = 1;  // DP after second digit (XX.X)
-//	     }
-//	     else
-//	     {
-//	         // Format: XXX. (e.g. 123.0 → 1 2 3)
-//	         val_int = (int)(voltage + 0.5f);  // round to int
-//
-//	         digits[0] = (val_int / 1000) % 10;
-//	         digits[1] = (val_int / 100) % 10;
-//	         digits[2] = (val_int / 10) % 10;
-//	         digits[3] = val_int % 10;
-//
-//
-//	         //digits[] = 0;  // DP after third digit (XXX.)
-//	     }
+
 
 
   }
