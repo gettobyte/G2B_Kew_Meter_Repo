@@ -105,7 +105,7 @@ unsigned char seg = 0;
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN EV */
-extern uint8_t digits[];
+extern uint16_t digits[];
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -215,22 +215,20 @@ void TIM3_IRQHandler(void)
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (pattern & 0x20) ? GPIO_PIN_RESET : GPIO_PIN_SET); // B
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, (pattern & 0x10) ? GPIO_PIN_RESET : GPIO_PIN_SET); // C
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, (pattern & 0x08) ? GPIO_PIN_RESET : GPIO_PIN_SET); // D
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, (pattern & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET); //E
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, (pattern & 0x04)? GPIO_PIN_RESET : GPIO_PIN_SET); //E
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, (pattern & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET); // F
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, (pattern & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET); // G
-//
-//
-//	Handle Dot Point (DP) on PA7
-    if (seg == 9)
-    {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);  // DP ON
-    }
-    else
-    {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);    // DP OFF otherwise
-    }
-//
-//	// === Enable current digit (active-low) ===
+
+
+ if (digits [8 + seg])
+ {
+	 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4,GPIO_PIN_SET);
+ }
+	 else
+	 {
+		 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4,GPIO_PIN_RESET);
+	 }
+
 	switch (seg)
 	{
 	    //This turns ON digits
