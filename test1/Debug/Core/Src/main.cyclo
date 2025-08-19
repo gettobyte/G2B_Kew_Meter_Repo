@@ -1,7 +1,10 @@
-../Core/Src/main.c:206:10:ADC_Convert	2
-../Core/Src/main.c:236:5:main	99
-../Core/Src/main.c:839:6:SystemClock_Config	3
-../Core/Src/main.c:885:13:MX_ADC1_Init	4
-../Core/Src/main.c:953:13:MX_TIM3_Init	6
-../Core/Src/main.c:1011:13:MX_GPIO_Init	1
-../Core/Src/main.c:1078:6:Error_Handler	1
+../Core/Src/main.c:226:10:ADC_Current	2
+../Core/Src/main.c:246:10:ADC_Voltage	2
+../Core/Src/main.c:266:6:CurrentValue	8
+../Core/Src/main.c:354:6:VoltageValue	13
+../Core/Src/main.c:504:5:main	93
+../Core/Src/main.c:1037:6:SystemClock_Config	3
+../Core/Src/main.c:1083:13:MX_ADC1_Init	4
+../Core/Src/main.c:1151:13:MX_TIM3_Init	6
+../Core/Src/main.c:1209:13:MX_GPIO_Init	1
+../Core/Src/main.c:1276:6:Error_Handler	1

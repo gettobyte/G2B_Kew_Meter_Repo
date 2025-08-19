@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "math.h"
+#include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,7 +34,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define SAMPLES 255
+#define SAMPLES 255.0f
 
 #define SMOOTHING_SHIFT 3
 
@@ -42,15 +44,27 @@
 #define BUTTON2_Pin GPIO_PIN_11
 #define BUTTON2_GPIO_Port GPIOA
 
+#define RING_SIZE        16        // number of entries in the averaging buffer
+#define RING_THRESHOLD   0.1f      // 0.5 V: update buffer only when avg would change by >= 0.5V
 
-#define alpha                0.02f   // Smoothing factor
-#define OFFSET_ADC_VAL       62.0f      // Offset (at 0 A)
-#define ADC_REF_VOLTAGE     3300.0f  // mV
+
+#define alpha                0.1f   // Smoothing factor
+#define OFFSET_ADC_Curr       64.9f      // Offset (at 0 A)
+#define OFFSET_ADC_Volt       9.0f
+
+//static float baseline = 0.0f;
+//#define BASELINE_ALPHA  0.002f       // how fast baseline adapts
+//#define DETECT_THRESH   6.0f         // only adapt when signal small
+
+#define ADC_REF_VOLTAGE     3280.0f  // mV
 #define ADC_RESOLUTION      4095.0f
 #define AMPLIFIER_GAIN       50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
 #define SHUNT_RESISTANCE    0.000375f // Ohms
 
-
+static float ring_buf[RING_SIZE];
+static uint8_t ring_idx = 0;
+static uint8_t ring_count = 0;
+static float ring_sum = 0.0f;
 
 GPIO_PinState b2;
 GPIO_PinState b1;
@@ -116,6 +130,7 @@ uint16_t average_2 = 0;
 uint16_t voltage_V = 0;
 
 float voltage = 0;
+float current = 0;
 
 float corrected_1 = 0;
 
@@ -130,11 +145,14 @@ int16_t filtered_adc_1 = 0;
 int val_int;
 
 float ema_current = 0;
+float ema_voltage = 0;
 
 float offset_correction;
 float gain_correction;
 float v_shunt;
 float v_out;
+float i_shunt;
+float i_out;
 
 // if password doesnt match
 
@@ -194,6 +212,8 @@ int partModeIndex = 0;
 int saveToggle = 0; // 0 = EVEn, 1 = odd
 int programming = 0;
 
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -203,7 +223,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-uint16_t ADC_Convert(void)
+uint16_t ADC_Current(void)
 {
 	ADC_ChannelConfTypeDef sConfig = {0};
 
@@ -221,6 +241,254 @@ uint16_t ADC_Convert(void)
 	HAL_ADC_Stop(&hadc1);
 
 	return adc_Value_1;
+}
+
+uint16_t ADC_Voltage(void)
+{
+	ADC_ChannelConfTypeDef sConfig = {0};
+
+	  sConfig.Channel = ADC_CHANNEL_1;
+	  sConfig.Rank = ADC_REGULAR_RANK_1;
+	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+
+	status = HAL_ADC_Start(&hadc1);
+	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
+	HAL_ADC_Stop(&hadc1);
+
+	return adc_Value_1;
+}
+
+void CurrentValue ()
+{
+	 sum = 0;
+
+	 for (uint8_t i = 0; i < SAMPLES; i++)
+	 {
+		 adc_Value = ADC_Current();   // ADC reading
+		 sum += adc_Value;
+	 }
+
+	 average = sum / SAMPLES;
+
+	 // Offset correction
+	 corrected_1 = (average > OFFSET_ADC_Curr) ? (average - OFFSET_ADC_Curr) : 0;
+
+
+	 // Step 1: Convert ADC to voltage
+	 i_out = (corrected_1 * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
+
+	 // Step 2: Reverse amplifier gain to get shunt voltage
+	 i_shunt = i_out / AMPLIFIER_GAIN; // mV
+
+	 // Step 3: Calculate current using Ohm's Law (I = V / R)
+	 current = i_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
+
+	 // Step 4: Apply calibration to correct gain error (based on your measurements)
+	 gain_correction = 0.97f;   // Adjust this based on your observed error
+	 offset_correction = -0.02f; // Optional fine offset if needed
+
+	 current = current * gain_correction + offset_correction;
+
+	 // Apply Exponential Moving Average
+	 ema_current = alpha * current + (1 - alpha) * ema_current;
+	 // Step 5: Round to 1 decimal place
+	 // voltage = ((int)(voltage * 10 + 0.5)) / 10.0f;
+
+	 // === Step 9: Clamp and Prepare Current ===
+	 if (current > 200.0f) current = 200.0f;
+	 if (current < 0.0f) current = 0.0f;
+
+	 // === Step 10: Clear Digits & DPs ===
+	 for (int i = 0; i < 4; i++) {
+		 digits[i] = 0;
+		 digits[8 + i] = 0;
+	 }
+
+
+
+	 // === Step 11: Extract digits + Set DP ===
+	 if (current < 10.0f)
+	 {
+		 // Format: X.XX (e.g. 2.34 → 2 3 4)
+		 val_int = (int)(current * 1000 + 0.5f);  // e.g. 2.34 → 234
+
+		 digits[0] = (val_int / 1000) % 10;
+		 digits[1] = (val_int / 100) % 10;
+		 digits[2] = (val_int / 10) % 10;
+		 digits[3] =  val_int % 10;
+		 digits[8] = 1;  // DP after first digit (X.XX)
+	 }
+	 else if (current < 100.0f)
+	 {
+		 // Format: XX.X (e.g. 23.4 → 2 3 4)
+		 val_int = (int)(current * 100 + 0.5f);  // e.g. 23.4 → 234
+
+		 digits[0] = (val_int / 1000) % 10;
+		 digits[1] = (val_int / 100) % 10;
+		 digits[2] = (val_int / 10) % 10;
+		 digits[3] =  val_int % 10;
+
+		 digits[9] = 1;  // DP after second digit (XX.X)
+	 }
+	 else
+	 {
+		 // Format: XXX. (e.g. 123.0 → 1 2 3)
+		 val_int = (int)(current * 10 + 0.5f);  //
+
+		 digits[0] = (val_int / 1000) % 10;
+		 digits[1] = (val_int / 100) % 10;
+		 digits[2] = (val_int / 10) % 10;
+		 digits[3] =  val_int % 10;
+
+
+		 digits[10] = 1;  // DP after third digit (XXX.)
+	 }
+
+}
+
+void VoltageValue ()
+{
+	 sum = 0;
+	 static uint32_t stable_value = 0;   // holds the fixed/stable ADC value
+	  const uint32_t THRESHOLD = 50;     // adjust this for 0.5V equivalent in ADC counts
+
+
+	 for (uint8_t i = 0; i < SAMPLES; i++)
+	 {
+		 adc_Value = ADC_Voltage();   // ADC reading
+		 sum += adc_Value;
+	 }
+
+	 average = sum / SAMPLES;
+
+//	 if ( (average > stable_value + THRESHOLD) || (average < stable_value - THRESHOLD) )
+//	 {
+//	     stable_value = average;   // update only if change is significant
+//	 }
+
+	 // Offset correction
+	 corrected_1 = (average > OFFSET_ADC_Volt) ? (average - OFFSET_ADC_Volt) : 0;
+//	 /* Update baseline when no real signal */
+//	 if (average < DETECT_THRESH) {
+//	     baseline = (1.0f - BASELINE_ALPHA) * baseline + BASELINE_ALPHA * average;
+//	 }
+
+	 /* Subtract baseline instead of fixed OFFSET_ADC_Volt */
+	 //corrected_1 = (average > baseline) ? (average - baseline) : 0;
+
+	 // Step 1: Convert ADC to voltage
+	 v_out = (corrected_1 * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
+
+	 // Step 2: Reverse amplifier gain to get shunt voltage
+	 voltage = v_out / 20.7f; // mV
+
+//	 // Step 3: Calculate current using Ohm's Law (I = V / R)
+	 voltage = v_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
+
+	 // Step 4: Apply calibration to correct gain error (based on your measurements)
+	 gain_correction = 0.97f;    // Adjust this based on your observed error
+	 offset_correction = -0.864f; // Optional fine offset if needed
+
+	 voltage = voltage * gain_correction  ;
+
+	 // Apply Exponential Moving Average
+	 ema_voltage = alpha * voltage + (1 - alpha) * ema_voltage;
+
+
+
+	 if (ring_count == 0)
+	 {
+	     /* Fill buffer with the initial EMA so initial display is stable */
+	     for (uint8_t i = 0; i < RING_SIZE; i++) ring_buf[i] = ema_voltage;
+	     ring_sum = ema_voltage * RING_SIZE;
+	     ring_count = RING_SIZE;
+	     ring_idx = 0;
+	 }
+
+	 /* Current ring average */
+	 float ring_avg = ring_sum / (float)ring_count;
+
+	 /* Decide whether to accept new sample */
+	 if (fabsf(ema_voltage - ring_avg) >= RING_THRESHOLD)
+	 {
+	     /* replace oldest entry with new sample */
+	     ring_sum -= ring_buf[ring_idx];
+	     ring_buf[ring_idx] = ema_voltage;
+	     ring_sum += ring_buf[ring_idx];
+
+	     /* advance index */
+	     ring_idx++;
+	     if (ring_idx >= RING_SIZE) ring_idx = 0;
+
+	     /* recompute average */
+	     ring_avg = ring_sum / (float)ring_count;
+	 }
+
+	 /* The display voltage is the ring average (stable) */
+	 float display_voltage = ring_avg ;
+
+
+	 // After computing display_voltage
+	 if (fabsf(display_voltage) < 0.2f)   // anything below 50 mV = 0.00
+	     display_voltage = 0.0f;
+
+
+	 /* ---------- clamp display_voltage (unchanged behavior) ---------- */
+	 if (display_voltage > 200.0f) display_voltage = 200.0f;
+	 if (display_voltage < 0.0f)   display_voltage = 0.0f;
+
+	 /* ---------- Clear digits & DPs ---------- */
+	 for (int i = 0; i < 4; i++) {
+	     digits[i] = 0;
+	     digits[8 + i] = 0;
+	 }
+
+	 /* ---------- Extract digits + Set DP ---------- */
+	 /* NOTE: Using display_voltage (ring-averaged) for all formatting */
+	 if (display_voltage < 10.0f)
+	 {
+	     // Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+	     val_int = (int)(display_voltage * 100 + 0.5f);  // e.g. 2.34 -> 234 (hundreds=tens etc.)
+
+	     digits[0] = (val_int / 100) % 10; // integer part
+	     digits[1] = (val_int / 10) % 10;  // first decimal
+	     digits[2] =  val_int % 10;        // second decimal
+	     digits[3] = 0;                    // optional: fill with fake digit if desired
+
+	     digits[8] = 1;  // DP after first digit (X.XX)
+	 }
+	 else if (display_voltage < 100.0f)
+	 {
+	     // Format: XX.XX (tens, ones, two decimals)
+	     val_int = (int)(display_voltage * 100 + 0.5f);  // e.g. 23.45 -> 2345
+
+	     digits[0] = (val_int / 1000) % 10; // tens
+	     digits[1] = (val_int / 100) % 10;  // ones
+	     digits[2] = (val_int / 10) % 10;   // first decimal
+	     digits[3] =  val_int % 10;         // second decimal
+
+	     digits[9] = 1;  // DP after second digit (XX.XX)
+	 }
+	 else
+	 {
+	     // Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+	     val_int = (int)(display_voltage * 10 + 0.5f);  // e.g. 123.4 -> 1234
+
+	     digits[0] = (val_int / 1000) % 10; // hundreds
+	     digits[1] = (val_int / 100) % 10;  // tens
+	     digits[2] = (val_int / 10) % 10;   // ones
+	     digits[3] =  val_int % 10;         // first decimal
+
+	     digits[10] = 1;  // DP after third digit (XXX.X)
+	 }
+
+//	 HAL_Delay(200);
+
 }
 
 /* USER CODE END PFP */
@@ -263,10 +531,16 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK)
+  {
+      Error_Handler();
+  }
+
   status = HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
 
-	 digits[8]=1;
-	 digits[13]=1;
+  digits[8]=1;
+  digits[13]=1;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -285,6 +559,7 @@ int main(void)
 	     {
 	         if (b1 == GPIO_PIN_RESET && b2 == GPIO_PIN_RESET)
 	         {
+
 	             if (waitingFor2Sec == 0)
 	             {
 	                 buttonPressStartTime = HAL_GetTick();
@@ -292,8 +567,11 @@ int main(void)
 	             }
 	             else if (HAL_GetTick() - buttonPressStartTime >= 2000)
 	             {
+
 	            	 digits[8]=0;
 	            	 digits[13]=0;
+	            	 digits[9]=0;
+	            	 digits[10]=0;
 
 	            	 inPasswordMode = 1;
 	            	 entryComplete = 0;
@@ -307,7 +585,9 @@ int main(void)
 	                 digits[7] = 28; // S
 
 
-	                 for (int i = 0; i < 4; i++) {
+	                 for (int i = 0; i < 4; i++)
+	                 {
+
 	                     digits[i] = 0;
 	                     passwordEntered[i] = 0;
 	                 }
@@ -317,90 +597,8 @@ int main(void)
 	         else
 	         {
 	             waitingFor2Sec = 0;
-
-	             sum = 0;
-
-	             for (uint8_t i = 0; i < SAMPLES; i++)
-	             {
-	                 adc_Value = ADC_Convert();   // ADC reading
-	                 sum += adc_Value;
-	             }
-
-	             average = sum / SAMPLES;
-
-	             // Offset correction
-	             corrected_1 = (average > OFFSET_ADC_VAL) ? (average - OFFSET_ADC_VAL) : 0;
-
-	             // Apply Exponential Moving Average
-	             ema_current = alpha * corrected_1 + (1 - alpha) * ema_current;
-
-	             // Step 1: Convert ADC to voltage
-	             v_out = (ema_current * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
-
-	             // Step 2: Reverse amplifier gain to get shunt voltage
-	             v_shunt = v_out / AMPLIFIER_GAIN; // mV
-
-	             // Step 3: Calculate current using Ohm's Law (I = V / R)
-	             voltage = v_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
-
-	             // Step 4: Apply calibration to correct gain error (based on your measurements)
-	             gain_correction = 0.91f;   // Adjust this based on your observed error
-	             offset_correction = -0.02f; // Optional fine offset if needed
-
-	             voltage = voltage * gain_correction + offset_correction;
-
-	             // Step 5: Round to 1 decimal place
-	             voltage = ((int)(voltage * 10 + 0.5)) / 10.0f;
-
-	    	     // === Step 9: Clamp and Prepare Current ===
-	    	     if (voltage > 200.0f) voltage = 200.0f;
-	    	     if (voltage < 0.0f) voltage = 0.0f;
-
-	    	     // === Step 10: Clear Digits & DPs ===
-	    	     for (int i = 0; i < 4; i++) {
-	    	         digits[i] = 0;
-	    	         digits[8 + i] = 0;
-	    	     }
-
-
-
-	    	     // === Step 11: Extract digits + Set DP ===
-	    	     if (voltage < 10.0f)
-	    	     {
-	    	         // Format: X.XX (e.g. 2.34 → 2 3 4)
-	    	         val_int = (int)(voltage * 1000 + 0.5f);  // e.g. 2.34 → 234
-
-	    	         digits[0] = (val_int / 1000) % 10;
-	    			 digits[1] = (val_int / 100) % 10;
-	    			 digits[2] = (val_int / 10) % 10;
-	    			 digits[3] =  val_int % 10;
-	    	         digits[8] = 1;  // DP after first digit (X.XX)
-	    	     }
-	    	     else if (voltage < 100.0f)
-	    	     {
-	    	         // Format: XX.X (e.g. 23.4 → 2 3 4)
-	    	         val_int = (int)(voltage * 100 + 0.5f);  // e.g. 23.4 → 234
-
-	    	         digits[0] = (val_int / 1000) % 10;
-	    			 digits[1] = (val_int / 100) % 10;
-	    			 digits[2] = (val_int / 10) % 10;
-	    			 digits[3] =  val_int % 10;
-
-	    	         digits[9] = 1;  // DP after second digit (XX.X)
-	    	     }
-	    	     else
-	    	     {
-	    	         // Format: XXX. (e.g. 123.0 → 1 2 3)
-	    	         val_int = (int)(voltage * 10 + 0.5f);  //
-
-	    	         digits[0] = (val_int / 1000) % 10;
-	    	         digits[1] = (val_int / 100) % 10;
-	    	         digits[2] = (val_int / 10) % 10;
-	    	         digits[3] =  val_int % 10;
-
-
-	    	         digits[10] = 1;  // DP after third digit (XXX.)
-	    	     }
+	             //CurrentValue ();
+	             VoltageValue ();
 
 
 	         }
