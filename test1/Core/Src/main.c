@@ -32,7 +32,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define SAMPLES 255.0f
+#define SAMPLES 1024.0f
 
 #define SMOOTHING_SHIFT 3
 
@@ -42,12 +42,11 @@
 #define BUTTON2_Pin GPIO_PIN_11
 #define BUTTON2_GPIO_Port GPIOA
 
-#define RING_SIZE        16        // number of entries in the averaging buffer
-#define RING_THRESHOLD   0.1f      // 0.5 V: update buffer only when avg would change by >= 0.5V
-
+//#define RING_SIZE        16        // number of entries in the averaging buffer
+//#define RING_THRESHOLD   0.1f      // 0.5 V: update buffer only when avg would change by >= 0.5V
 
 #define alpha                0.1f   // Smoothing factor
-#define OFFSET_ADC_Curr       64.9f      // Offset (at 0 A)
+#define OFFSET_ADC_Curr       3.75f      // Offset (at 0 A)
 #define OFFSET_ADC_Volt       5.0f
 
 #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
@@ -57,15 +56,9 @@
 //#define BASELINE_ALPHA  0.002f       // how fast baseline adapts
 //#define DETECT_THRESH   6.0f         // only adapt when signal small
 
-#define ADC_REF_VOLTAGE     3280.0f  // mV
 #define ADC_RESOLUTION      4095.0f
 #define AMPLIFIER_GAIN       50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
-#define SHUNT_RESISTANCE    0.000375f // Ohms
 
-static float ring_buf[RING_SIZE];
-static uint8_t ring_idx = 0;
-static uint8_t ring_count = 0;
-static float ring_sum = 0.0f;
 
 GPIO_PinState b2;
 GPIO_PinState b1;
@@ -85,6 +78,7 @@ TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN PV */
 HAL_StatusTypeDef status;
 
+float SHUNT_RESISTANCE   =  0.000375f; // Ohms
 uint16_t digits[16];
 
 uint32_t buttonPressStartTime = 0;
@@ -117,26 +111,22 @@ uint16_t adc_Value_1= 0;
 
 uint16_t adc_Value_2= 0;
 
-uint32_t sum = 0;
 
-uint32_t sum_1 = 0;
 
-uint32_t sum_2 = 0;
+uint32_t sum_V = 0;
 
-float average = 0;
+uint32_t sum_C = 0;
 
-uint16_t average_1 = 0;
+float average_V = 0;
 
-uint16_t average_2 = 0;
-
-uint16_t voltage_V = 0;
+float average_C = 0;
 
 float voltage = 0;
 float current = 0;
 
-float corrected_1 = 0;
+float corrected_V = 0;
 
-int16_t corrected_2 = 0;
+int16_t corrected_A = 0;
 
 uint16_t number = 0;
 
@@ -155,7 +145,7 @@ float v_shunt;
 float v_out;
 float i_shunt;
 float i_out;
-uint16_t adcBuffer[255];
+
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint32_t vdda_mV = 0;       // calculated VDDA (mV)
 
@@ -233,12 +223,17 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-//static inline uint32_t ADC_GetVDDA_mV(uint16_t adc_vrefint)
-//{
-//	adc_vrefint = AD_RES_BUFFER[2];
-//    uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
-//    return (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
-//}
+// Convert buffer digits into float shunt resistance
+float get_shunt_from_buffer(uint8_t buf[4]) {
+    // Example buf = {0,7,5,9} → 75.9
+    int d1 = buf[0];  // tens
+    int d2 = buf[1];  // ones
+    int d3 = buf[2];  // tenths
+    int d4 = buf[3];  // hundredths (if needed)
+
+    float value = (d1 * 10.0f) + (d2 * 1.0f) + (d3 * 0.1f) + (d4 * 0.01f);
+    return value;
+}
 
 uint16_t ADC_Current(void)
 {
@@ -283,42 +278,58 @@ uint16_t ADC_Voltage(void)
 
 void CurrentValue ()
 {
-	 sum = 0;
+	 sum_C = 0;
 
-	 for (uint8_t i = 0; i < SAMPLES; i++)
+	for (uint16_t i = 0; i < SAMPLES; i++)
+	{
+	    HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
+		//adcBuffer_C[i] = AD_RES_BUFFER[1];   // save each sample in buffer
+		sum_C += AD_RES_BUFFER[1];               // also sum if you still need average
+	}
+
+	 average_C = sum_C / SAMPLES;
+
+
+
+	 corrected_A = (average_C > OFFSET_ADC_Curr) ? (average_C - OFFSET_ADC_Curr) : 0;
+
+	 adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
+
+	 uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
+
+	 vdda_mV = (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
+
+	 current = (corrected_A * vdda_mV) / 4095;
+
+	 current = ((current) / 50 );
+
+
+     gain_correction = 1.028f;    // Adjust this based on your observed error
+	 offset_correction = 0.07f; // Optional fine offset if needed
+
+	 current = ( current * gain_correction) + offset_correction;
+
+
+	 static float ema_current = 0.0f;
+	 const float EMA_ALPHA = 0.01f;   // smoothing factor (0.01 = very stable, 0.2 = faster response)
+
+	 ema_current = ema_current + EMA_ALPHA * (current - ema_current);
+
+	 /* --- Stable display logic with hysteresis --- */
+	 static float last_display_current = 0.0f;
+	 const float DISPLAY_THRESHOLD = 0.1f;   // 100 mV stability band
+
+	 if (fabsf(ema_current - last_display_current) >= DISPLAY_THRESHOLD)
 	 {
-		 adc_Value = ADC_Current();   // ADC reading
-		 sum += adc_Value;
+		 last_display_current = ema_current;
 	 }
 
-	 average = sum / SAMPLES;
-
-	 // Offset correction
-	 corrected_1 = (average > OFFSET_ADC_Curr) ? (average - OFFSET_ADC_Curr) : 0;
+	 float display_current = last_display_current;
 
 
-	 // Step 1: Convert ADC to voltage
-	 i_out = (corrected_1 * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
-
-	 // Step 2: Reverse amplifier gain to get shunt voltage
-	 i_shunt = i_out / AMPLIFIER_GAIN; // mV
-
-	 // Step 3: Calculate current using Ohm's Law (I = V / R)
-	 current = i_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
-
-	 // Step 4: Apply calibration to correct gain error (based on your measurements)
-	 gain_correction = 0.97f;   // Adjust this based on your observed error
-	 offset_correction = -0.02f; // Optional fine offset if needed
-
-	 current = current * gain_correction + offset_correction;
-
-	 // Apply Exponential Moving Average
-	 ema_current = alpha * current + (1 - alpha) * ema_current;
-	 // Step 5: Round to 1 decimal place
-	 // voltage = ((int)(voltage * 10 + 0.5)) / 10.0f;
 
 	 // === Step 9: Clamp and Prepare Current ===
-	 if (current > 200.0f) current = 200.0f;
+	 //if (current > 200.0f) current = 200.0f;
 	 if (current < 0.0f) current = 0.0f;
 
 	 // === Step 10: Clear Digits & DPs ===
@@ -329,62 +340,61 @@ void CurrentValue ()
 
 
 
-	 // === Step 11: Extract digits + Set DP ===
-	 if (current < 10.0f)
-	 {
-		 // Format: X.XX (e.g. 2.34 → 2 3 4)
-		 val_int = (int)(current * 1000 + 0.5f);  // e.g. 2.34 → 234
+	 if (display_current < 10.0f)
+		 {
+		     // Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+		     val_int = (int)(display_current * 100 + 0.5f);  // e.g. 2.34 -> 234 (hundreds=tens etc.)
 
-		 digits[0] = (val_int / 1000) % 10;
-		 digits[1] = (val_int / 100) % 10;
-		 digits[2] = (val_int / 10) % 10;
-		 digits[3] =  val_int % 10;
-		 digits[8] = 1;  // DP after first digit (X.XX)
-	 }
-	 else if (current < 100.0f)
-	 {
-		 // Format: XX.X (e.g. 23.4 → 2 3 4)
-		 val_int = (int)(current * 100 + 0.5f);  // e.g. 23.4 → 234
+		     digits[0] = (val_int / 100) % 10; // integer part
+		     digits[1] = (val_int / 10) % 10;  // first decimal
+		     digits[2] =  val_int % 10;        // second decimal
+		     digits[3] = 0;                    // optional: fill with fake digit if desired
 
-		 digits[0] = (val_int / 1000) % 10;
-		 digits[1] = (val_int / 100) % 10;
-		 digits[2] = (val_int / 10) % 10;
-		 digits[3] =  val_int % 10;
+		     digits[8] = 1;  // DP after first digit (X.XX)
+		 }
+		 else if (display_current < 100.0f)
+		 {
+		     // Format: XX.XX (tens, ones, two decimals)
+		     val_int = (int)(display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
 
-		 digits[9] = 1;  // DP after second digit (XX.X)
-	 }
-	 else
-	 {
-		 // Format: XXX. (e.g. 123.0 → 1 2 3)
-		 val_int = (int)(current * 10 + 0.5f);  //
+		     digits[0] = (val_int / 1000) % 10; // tens
+		     digits[1] = (val_int / 100) % 10;  // ones
+		     digits[2] = (val_int / 10) % 10;   // first decimal
+		     digits[3] =  val_int % 10;         // second decimal
 
-		 digits[0] = (val_int / 1000) % 10;
-		 digits[1] = (val_int / 100) % 10;
-		 digits[2] = (val_int / 10) % 10;
-		 digits[3] =  val_int % 10;
+		     digits[9] = 1;  // DP after second digit (XX.XX)
+		 }
+		 else
+		 {
+		     // Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+		     val_int = (int)(display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
 
+		     digits[0] = (val_int / 1000) % 10; // hundreds
+		     digits[1] = (val_int / 100) % 10;  // tens
+		     digits[2] = (val_int / 10) % 10;   // ones
+		     digits[3] =  val_int % 10;         // first decimal
 
-		 digits[10] = 1;  // DP after third digit (XXX.)
-	 }
+		     digits[10] = 1;  // DP after third digit (XXX.X)
+		 }
+
 
 }
 
 void VoltageValue ()
 {
-        sum = 0;
+        sum_V = 0;
 
         for (uint16_t i = 0; i < SAMPLES; i++)
         {
        	 HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 2);
-            adcBuffer[i] = AD_RES_BUFFER[0];   // save each sample in buffer
-            sum += adcBuffer[i];               // also sum if you still need average
+            //adcBuffer_V[i] = AD_RES_BUFFER[0];   // save each sample in buffer
+            sum_V += AD_RES_BUFFER[0];               // also sum if you still need
+
         }
 
-		 average = sum / SAMPLES;
+         average_V = sum_V / SAMPLES;
 
-
-
-		 corrected_1 = (average > OFFSET_ADC_Volt) ? (average - OFFSET_ADC_Volt) : 0;
+		 corrected_V = (average_V > OFFSET_ADC_Volt) ? (average_V - OFFSET_ADC_Volt) : 0;
 
 		 adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
 
@@ -392,7 +402,7 @@ void VoltageValue ()
 
 		 vdda_mV = (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
 
-		 voltage = (corrected_1 * vdda_mV) / 4095;
+		 voltage = (corrected_V * vdda_mV) / 4095;
 
 
 		 gain_correction = 1.028f;    // Adjust this based on your observed error
@@ -456,8 +466,6 @@ void VoltageValue ()
 	 // After computing display_voltage
 	 if (fabsf(display_voltage) < 0.2f)   // anything below 50 mV = 0.00
 	     display_voltage = 0.0f;
-
-
 
 	 /* ---------- clamp display_voltage (unchanged behavior) ---------- */
 	 if (display_voltage > 200.0f) display_voltage = 200.0f;
@@ -618,10 +626,10 @@ int main(void)
 	         else
 	         {
 	             waitingFor2Sec = 0;
-	             //CurrentValue ();
 	       	    HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
 
-	            VoltageValue ();
+	               CurrentValue ();
+	             //VoltageValue ();
 
 
 
