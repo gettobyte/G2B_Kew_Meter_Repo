@@ -1,6 +1,7 @@
-../Core/Src/stm32g0xx_it.c:117:6:NMI_Handler	8	static
-../Core/Src/stm32g0xx_it.c:132:6:HardFault_Handler	8	static
-../Core/Src/stm32g0xx_it.c:147:6:SVC_Handler	8	static
-../Core/Src/stm32g0xx_it.c:160:6:PendSV_Handler	8	static
-../Core/Src/stm32g0xx_it.c:173:6:SysTick_Handler	8	static
-../Core/Src/stm32g0xx_it.c:194:6:TIM3_IRQHandler	16	static
+../Core/Src/stm32g0xx_it.c:118:6:NMI_Handler	8	static
+../Core/Src/stm32g0xx_it.c:133:6:HardFault_Handler	8	static
+../Core/Src/stm32g0xx_it.c:148:6:SVC_Handler	8	static
+../Core/Src/stm32g0xx_it.c:161:6:PendSV_Handler	8	static
+../Core/Src/stm32g0xx_it.c:174:6:SysTick_Handler	8	static
+../Core/Src/stm32g0xx_it.c:195:6:DMA1_Channel1_IRQHandler	8	static
+../Core/Src/stm32g0xx_it.c:209:6:TIM3_IRQHandler	16	static

@@ -18,8 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "math.h"
-#include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -50,7 +48,10 @@
 
 #define alpha                0.1f   // Smoothing factor
 #define OFFSET_ADC_Curr       64.9f      // Offset (at 0 A)
-#define OFFSET_ADC_Volt       9.0f
+#define OFFSET_ADC_Volt       5.0f
+
+#define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
+#define VREFINT_CAL_VREF   3000UL   // mV
 
 //static float baseline = 0.0f;
 //#define BASELINE_ALPHA  0.002f       // how fast baseline adapts
@@ -77,6 +78,7 @@ GPIO_PinState b1;
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim3;
 
@@ -153,6 +155,13 @@ float v_shunt;
 float v_out;
 float i_shunt;
 float i_out;
+uint16_t adcBuffer[255];
+uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
+uint32_t vdda_mV = 0;       // calculated VDDA (mV)
+
+
+
+uint16_t AD_RES_BUFFER[3];
 
 // if password doesnt match
 
@@ -219,9 +228,17 @@ int programming = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
+
+//static inline uint32_t ADC_GetVDDA_mV(uint16_t adc_vrefint)
+//{
+//	adc_vrefint = AD_RES_BUFFER[2];
+//    uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
+//    return (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
+//}
 
 uint16_t ADC_Current(void)
 {
@@ -261,6 +278,7 @@ uint16_t ADC_Voltage(void)
 	HAL_ADC_Stop(&hadc1);
 
 	return adc_Value_1;
+
 }
 
 void CurrentValue ()
@@ -353,89 +371,92 @@ void CurrentValue ()
 
 void VoltageValue ()
 {
-	 sum = 0;
-	 static uint32_t stable_value = 0;   // holds the fixed/stable ADC value
-	  const uint32_t THRESHOLD = 50;     // adjust this for 0.5V equivalent in ADC counts
+        sum = 0;
 
+        for (uint16_t i = 0; i < SAMPLES; i++)
+        {
+       	 HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 2);
+            adcBuffer[i] = AD_RES_BUFFER[0];   // save each sample in buffer
+            sum += adcBuffer[i];               // also sum if you still need average
+        }
 
-	 for (uint8_t i = 0; i < SAMPLES; i++)
-	 {
-		 adc_Value = ADC_Voltage();   // ADC reading
-		 sum += adc_Value;
-	 }
-
-	 average = sum / SAMPLES;
-
-//	 if ( (average > stable_value + THRESHOLD) || (average < stable_value - THRESHOLD) )
-//	 {
-//	     stable_value = average;   // update only if change is significant
-//	 }
-
-	 // Offset correction
-	 corrected_1 = (average > OFFSET_ADC_Volt) ? (average - OFFSET_ADC_Volt) : 0;
-//	 /* Update baseline when no real signal */
-//	 if (average < DETECT_THRESH) {
-//	     baseline = (1.0f - BASELINE_ALPHA) * baseline + BASELINE_ALPHA * average;
-//	 }
-
-	 /* Subtract baseline instead of fixed OFFSET_ADC_Volt */
-	 //corrected_1 = (average > baseline) ? (average - baseline) : 0;
-
-	 // Step 1: Convert ADC to voltage
-	 v_out = (corrected_1 * ADC_REF_VOLTAGE) / ADC_RESOLUTION;  // mV
-
-	 // Step 2: Reverse amplifier gain to get shunt voltage
-	 voltage = v_out / 20.7f; // mV
-
-//	 // Step 3: Calculate current using Ohm's Law (I = V / R)
-	 voltage = v_shunt / (SHUNT_RESISTANCE * 1000.0f);  // Convert mV to V
-
-	 // Step 4: Apply calibration to correct gain error (based on your measurements)
-	 gain_correction = 0.97f;    // Adjust this based on your observed error
-	 offset_correction = -0.864f; // Optional fine offset if needed
-
-	 voltage = voltage * gain_correction  ;
-
-	 // Apply Exponential Moving Average
-	 ema_voltage = alpha * voltage + (1 - alpha) * ema_voltage;
+		 average = sum / SAMPLES;
 
 
 
-	 if (ring_count == 0)
-	 {
-	     /* Fill buffer with the initial EMA so initial display is stable */
-	     for (uint8_t i = 0; i < RING_SIZE; i++) ring_buf[i] = ema_voltage;
-	     ring_sum = ema_voltage * RING_SIZE;
-	     ring_count = RING_SIZE;
-	     ring_idx = 0;
-	 }
+		 corrected_1 = (average > OFFSET_ADC_Volt) ? (average - OFFSET_ADC_Volt) : 0;
 
-	 /* Current ring average */
-	 float ring_avg = ring_sum / (float)ring_count;
+		 adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
 
-	 /* Decide whether to accept new sample */
-	 if (fabsf(ema_voltage - ring_avg) >= RING_THRESHOLD)
-	 {
-	     /* replace oldest entry with new sample */
-	     ring_sum -= ring_buf[ring_idx];
-	     ring_buf[ring_idx] = ema_voltage;
-	     ring_sum += ring_buf[ring_idx];
+		 uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
 
-	     /* advance index */
-	     ring_idx++;
-	     if (ring_idx >= RING_SIZE) ring_idx = 0;
+		 vdda_mV = (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
 
-	     /* recompute average */
-	     ring_avg = ring_sum / (float)ring_count;
-	 }
+		 voltage = (corrected_1 * vdda_mV) / 4095;
 
-	 /* The display voltage is the ring average (stable) */
-	 float display_voltage = ring_avg ;
+
+		 gain_correction = 1.028f;    // Adjust this based on your observed error
+		 offset_correction = 0.07f; // Optional fine offset if needed
+
+		 voltage = ( voltage / 11.95f )* gain_correction + offset_correction;
+
+
+		 /* --- Exponential Moving Average Filter --- */
+		 static float ema_voltage = 0.0f;
+		 const float EMA_ALPHA = 0.01f;   // smoothing factor (0.01 = very stable, 0.2 = faster response)
+
+		 ema_voltage = ema_voltage + EMA_ALPHA * (voltage - ema_voltage);
+
+		 /* --- Stable display logic with hysteresis --- */
+		 static float last_display_voltage = 0.0f;
+		 const float DISPLAY_THRESHOLD = 0.1f;   // 100 mV stability band
+
+		 if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD)
+		 {
+		     last_display_voltage = ema_voltage;
+		 }
+
+		 float display_voltage = last_display_voltage;
+
+
+//		 if (ring_count == 0)
+//		 {
+//		     /* Initialize buffer with first voltage value */
+//		     for (uint8_t i = 0; i < RING_SIZE; i++) ring_buf[i] = voltage;
+//		     ring_sum = voltage * RING_SIZE;
+//		     ring_count = RING_SIZE;
+//		     ring_idx = 0;
+//		 }
+//
+//		 /* --- Update ring buffer always (no skipping) --- */
+//		 ring_sum -= ring_buf[ring_idx];   // remove oldest
+//		 ring_buf[ring_idx] = voltage;     // insert newest
+//		 ring_sum += ring_buf[ring_idsx];   // add newest
+//
+//		 /* advance index */
+//		 ring_idx++;
+//		 if (ring_idx >= RING_SIZE) ring_idx = 0;
+//
+//		 /* average of buffer */
+//		 float ring_avg = ring_sum / (float)ring_count;
+//
+//		 /* --- Stable display logic --- */
+//		 static float last_display_voltage = 0.0f;
+//		 const float DISPLAY_THRESHOLD = 0.05f;   // 50 mV hysteresis, adjust as needed
+//
+//		 if (fabsf(ring_avg - last_display_voltage) >= DISPLAY_THRESHOLD)
+//		 {
+//		     last_display_voltage = ring_avg;
+//		 }
+//
+//		 float display_voltage = last_display_voltage;
+
 
 
 	 // After computing display_voltage
 	 if (fabsf(display_voltage) < 0.2f)   // anything below 50 mV = 0.00
 	     display_voltage = 0.0f;
+
 
 
 	 /* ---------- clamp display_voltage (unchanged behavior) ---------- */
@@ -513,7 +534,6 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -527,6 +547,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
@@ -598,7 +619,11 @@ int main(void)
 	         {
 	             waitingFor2Sec = 0;
 	             //CurrentValue ();
-	             VoltageValue ();
+	       	    HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
+
+	            VoltageValue ();
+
+
 
 
 	         }
@@ -1104,14 +1129,14 @@ static void MX_ADC1_Init(void)
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 2;
+  hadc1.Init.NbrOfConversion = 3;
   hadc1.Init.DiscontinuousConvMode = ENABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_39CYCLES_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_39CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -1133,6 +1158,15 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -1202,6 +1236,22 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -1219,28 +1269,33 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, C_D3_Pin|C_D2_Pin|F_Pin|A_Pin
-                          |C_D1_Pin|E_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, C_D3_Pin|C_D2_Pin|C_D4_Pin|F_Pin
+                          |A_Pin|C_D1_Pin|E_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, C_D4_Pin|B_Pin|V_D2_Pin|D_Pin
+  HAL_GPIO_WritePin(GPIOB, V_D3_Pin|B_Pin|V_D2_Pin|D_Pin
                           |DP_Pin|C_Pin|G_Pin|V_D4_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(V_D1_GPIO_Port, V_D1_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : C_D3_Pin C_D2_Pin F_Pin A_Pin
-                           C_D1_Pin E_Pin */
-  GPIO_InitStruct.Pin = C_D3_Pin|C_D2_Pin|F_Pin|A_Pin
-                          |C_D1_Pin|E_Pin;
+  /*Configure GPIO pins : C_D3_Pin A_Pin C_D1_Pin */
+  GPIO_InitStruct.Pin = C_D3_Pin|A_Pin|C_D1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : C_D2_Pin C_D4_Pin F_Pin E_Pin */
+  GPIO_InitStruct.Pin = C_D2_Pin|C_D4_Pin|F_Pin|E_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : C_D4_Pin B_Pin V_D2_Pin D_Pin
+  /*Configure GPIO pins : V_D3_Pin B_Pin V_D2_Pin D_Pin
                            DP_Pin C_Pin G_Pin V_D4_Pin */
-  GPIO_InitStruct.Pin = C_D4_Pin|B_Pin|V_D2_Pin|D_Pin
+  GPIO_InitStruct.Pin = V_D3_Pin|B_Pin|V_D2_Pin|D_Pin
                           |DP_Pin|C_Pin|G_Pin|V_D4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -1283,8 +1338,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
