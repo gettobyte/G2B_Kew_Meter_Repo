@@ -79,6 +79,7 @@ TIM_HandleTypeDef htim3;
 HAL_StatusTypeDef status;
 
 float SHUNT_RESISTANCE   =  0.000375f; // Ohms
+uint16_t flag1 = 0;
 uint16_t digits[16];
 
 uint32_t buttonPressStartTime = 0;
@@ -153,15 +154,6 @@ uint32_t vdda_mV = 0;       // calculated VDDA (mV)
 
 uint16_t AD_RES_BUFFER[3];
 
-// if password doesnt match
-
-uint8_t settingValues[5][4] = {
-    {0, 0, 0, 0}, // SHnt
-    {0, 0, 0, 0}, // du1d
-    {0, 0, 0, 0}, // bUAd
-    {0, 0, 0, 0}, // PArt
-    {34, 0, 0, 0} // SAVE (y by default in [0])
-};
 
 const uint8_t modeLabels[5][4] = {
         {28, 17, 23, 29}, // SHnt
@@ -174,8 +166,8 @@ const uint8_t modeLabels[5][4] = {
 // if password is correct
 
 uint8_t modeSettings[5][4] = {
-    {0, 7, 5, 9}, // Default SHnt
-    {0, 0, 0, 0}, // Default du1d
+    {2, 0, 0, 0}, // Default SHnt
+    {0, 1, 0, 37}, // Default du1d
     {9, 6, 0, 0}, // Default bUAd
     {14, 30, 14, 23}, // Default: EVEn (E, V, E, n)
     {34, 14, 5, 37}  // Default SAVE: y
@@ -278,6 +270,16 @@ uint16_t ADC_Voltage(void)
 
 void CurrentValue ()
 {
+
+	float shunt_A = ((float)modeSettings[0][0] * 100.0f) +
+	                ((float)modeSettings[0][1] * 10.0f) +
+	                ((float)modeSettings[0][2] * 1.0f) +
+	                ((float)modeSettings[0][3] * 0.1f);
+	float shunt_mV  = 75.0f;    // default 75 mV
+	float INA_gain  = 50.0f;    // INA180 gain (fixed)
+
+	// Derived shunt resistance
+	float R_shunt = (shunt_mV) / shunt_A;  // mOhms
 	 sum_C = 0;
 
 	for (uint16_t i = 0; i < SAMPLES; i++)
@@ -289,8 +291,6 @@ void CurrentValue ()
 
 	 average_C = sum_C / SAMPLES;
 
-
-
 	 corrected_A = (average_C > OFFSET_ADC_Curr) ? (average_C - OFFSET_ADC_Curr) : 0;
 
 	 adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
@@ -299,13 +299,12 @@ void CurrentValue ()
 
 	 vdda_mV = (uint32_t)VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
 
-	 current = (corrected_A * vdda_mV) / 4095;
+	 float v_adc = (corrected_A * vdda_mV) / 4095;
 
-	 current = ((current) / 50 );
+	 current = ((v_adc) / (INA_gain * R_shunt));
 
-
-     gain_correction = 1.028f;    // Adjust this based on your observed error
-	 offset_correction = 0.07f; // Optional fine offset if needed
+	 gain_correction = 1.034f;    // Adjust this based on your observed error
+	 offset_correction =   0.0f; // Optional fine offset if needed
 
 	 current = ( current * gain_correction) + offset_correction;
 
@@ -427,39 +426,6 @@ void VoltageValue ()
 		 }
 
 		 float display_voltage = last_display_voltage;
-
-
-//		 if (ring_count == 0)
-//		 {
-//		     /* Initialize buffer with first voltage value */
-//		     for (uint8_t i = 0; i < RING_SIZE; i++) ring_buf[i] = voltage;
-//		     ring_sum = voltage * RING_SIZE;
-//		     ring_count = RING_SIZE;
-//		     ring_idx = 0;
-//		 }
-//
-//		 /* --- Update ring buffer always (no skipping) --- */
-//		 ring_sum -= ring_buf[ring_idx];   // remove oldest
-//		 ring_buf[ring_idx] = voltage;     // insert newest
-//		 ring_sum += ring_buf[ring_idsx];   // add newest
-//
-//		 /* advance index */
-//		 ring_idx++;
-//		 if (ring_idx >= RING_SIZE) ring_idx = 0;
-//
-//		 /* average of buffer */
-//		 float ring_avg = ring_sum / (float)ring_count;
-//
-//		 /* --- Stable display logic --- */
-//		 static float last_display_voltage = 0.0f;
-//		 const float DISPLAY_THRESHOLD = 0.05f;   // 50 mV hysteresis, adjust as needed
-//
-//		 if (fabsf(ring_avg - last_display_voltage) >= DISPLAY_THRESHOLD)
-//		 {
-//		     last_display_voltage = ring_avg;
-//		 }
-//
-//		 float display_voltage = last_display_voltage;
 
 
 
@@ -628,9 +594,26 @@ int main(void)
 	             waitingFor2Sec = 0;
 	       	    HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
 
-	               CurrentValue ();
-	             //VoltageValue ();
+	       	 if (flag1 == 1 )
+	       	 {
+	       	    CurrentValue();
+	       	   b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
 
+				 if (b1 == GPIO_PIN_RESET)
+				  {
+					 flag1 = 0;
+				  }
+	       	 }
+	       	 if (flag1 == 0)
+	       	 {
+	             VoltageValue ();
+	            b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+
+	             if (b2 == GPIO_PIN_RESET)
+	             {
+	            	 flag1 = 1;
+	             }
+	       	 }
 
 
 
@@ -707,7 +690,7 @@ int main(void)
 	                         blinkState = 0;
 	                         blinkTimer = HAL_GetTick();
 
-	                         const uint8_t defaultShnt[4] = {0, 7, 5, 9};
+	                         const uint8_t defaultShnt[4] = {modeSettings[0][1], modeSettings[0][2], modeSettings[0][3], modeSettings[0][4]};
 	                         const uint8_t defaultDuid[4] = {0, 0, 0, 0};
 
 	                         int localMode = 0; // Tracks what to show: 0 → SHnt, 1 → du1d, 2 → reset
