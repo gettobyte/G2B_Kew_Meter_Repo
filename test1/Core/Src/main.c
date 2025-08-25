@@ -18,7 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
+#include "stdio.h"
+#include "string.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -42,9 +43,6 @@
 #define BUTTON2_Pin GPIO_PIN_11
 #define BUTTON2_GPIO_Port GPIOA
 
-//#define RING_SIZE        16        // number of entries in the averaging buffer
-//#define RING_THRESHOLD   0.1f      // 0.5 V: update buffer only when avg would change by >= 0.5V
-
 #define alpha                0.1f   // Smoothing factor
 #define OFFSET_ADC_Curr       3.75f      // Offset (at 0 A)
 #define OFFSET_ADC_Volt       5.0f
@@ -52,13 +50,17 @@
 #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
 #define VREFINT_CAL_VREF   3000UL   // mV
 
-//static float baseline = 0.0f;
-//#define BASELINE_ALPHA  0.002f       // how fast baseline adapts
-//#define DETECT_THRESH   6.0f         // only adapt when signal small
 
 #define ADC_RESOLUTION      4095.0f
 #define AMPLIFIER_GAIN       50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
 
+#define FLASH_USER_PAGE_ADDR   0x0800F800  // Last page
+#define FLASH_USER_PAGE_SIZE   2048
+#define ENTRY_SIZE             8           // 64-bit writes
+#define MAX_ENTRIES            (FLASH_USER_PAGE_SIZE / ENTRY_SIZE)
+
+
+//extern uint8_t modeSettings[5][4];  // Your array
 
 GPIO_PinState b2;
 GPIO_PinState b1;
@@ -78,8 +80,7 @@ TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN PV */
 HAL_StatusTypeDef status;
 
-float SHUNT_RESISTANCE   =  0.000375f; // Ohms
-uint16_t flag1 = 0;
+//uint16_t flag1 = 0;
 uint16_t digits[16];
 
 uint32_t buttonPressStartTime = 0;
@@ -106,14 +107,6 @@ uint8_t editMode = 0;                 // Are we editing digits?
 
 uint8_t readOnlyMode = 0;
 
-uint16_t adc_Value= 0;
-
-uint16_t adc_Value_1= 0;
-
-uint16_t adc_Value_2= 0;
-
-
-
 uint32_t sum_V = 0;
 
 uint32_t sum_C = 0;
@@ -129,12 +122,6 @@ float corrected_V = 0;
 
 int16_t corrected_A = 0;
 
-uint16_t number = 0;
-
-int16_t deviation, a, b, current_A;
-
-int16_t filtered_adc_1 = 0;
-
 int val_int;
 
 float ema_current = 0;
@@ -142,15 +129,9 @@ float ema_voltage = 0;
 
 float offset_correction;
 float gain_correction;
-float v_shunt;
-float v_out;
-float i_shunt;
-float i_out;
 
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint32_t vdda_mV = 0;       // calculated VDDA (mV)
-
-
 
 uint16_t AD_RES_BUFFER[3];
 
@@ -163,11 +144,10 @@ const uint8_t modeLabels[5][4] = {
         {28, 10, 30, 14}  // SAVE
     };
 
-// if password is correct
 
 uint8_t modeSettings[5][4] = {
-    {2, 0, 0, 0}, // Default SHnt
-    {0, 1, 0, 37}, // Default du1d
+    {2, 0, 0, 0}, // Default SHnt Value
+    {0, 1, 0, 37}, // Default du1d Value
     {9, 6, 0, 0}, // Default bUAd
     {14, 30, 14, 23}, // Default: EVEn (E, V, E, n)
     {34, 14, 5, 37}  // Default SAVE: y
@@ -192,18 +172,19 @@ const uint8_t baudModes[4][4] = {
 };
 uint8_t baudModeIndex = 0;
 
-
-// Set default values for modes (unless in edit)
-//if (!editMode && mode == 0) memcpy(settingDigits, (uint8_t[]){0, 7, 5, 9}, 4);
-//if (!editMode && mode == 2) memcpy(settingDigits, (uint8_t[]){9, 6, 0, 0}, 4);
-
 uint8_t modeEditBlink = 0; // Used in Mode 3 (PArt) and Mode 4 (SAVE)
 
 int partModeIndex = 0;
 int saveToggle = 0; // 0 = EVEn, 1 = odd
 int programming = 0;
 
+typedef struct {
+    uint32_t shuntValue;
+    uint8_t modeSettings[5][4];
+    uint32_t crc;   // optional: for data integrity
+} MeterSettings;
 
+MeterSettings settings;
 
 /* USER CODE END PV */
 
@@ -215,57 +196,49 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-// Convert buffer digits into float shunt resistance
-float get_shunt_from_buffer(uint8_t buf[4]) {
-    // Example buf = {0,7,5,9} → 75.9
-    int d1 = buf[0];  // tens
-    int d2 = buf[1];  // ones
-    int d3 = buf[2];  // tenths
-    int d4 = buf[3];  // hundredths (if needed)
+void SaveShuntValueToFlash(MeterSettings *settings)
+{
+	  HAL_FLASH_Unlock();
 
-    float value = (d1 * 10.0f) + (d2 * 1.0f) + (d3 * 0.1f) + (d4 * 0.01f);
-    return value;
+	    // Erase last page
+	    FLASH_EraseInitTypeDef eraseInitStruct;
+	    uint32_t PageError = 0;
+	    eraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
+	    eraseInitStruct.Page = 31;
+	    eraseInitStruct.NbPages = 1;
+	    HAL_FLASHEx_Erase(&eraseInitStruct, &PageError);
+
+	    // Write struct to flash
+	    uint64_t *src = (uint64_t*)settings;
+	    uint32_t flashAddr = FLASH_USER_PAGE_ADDR;
+	    for (uint32_t i = 0; i < sizeof(MeterSettings); i += 8) {
+	        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, flashAddr, *src++);
+	        flashAddr += 8;
+	    }
+
+	    HAL_FLASH_Lock();
 }
 
-uint16_t ADC_Current(void)
+//--------------------------------------------------
+// Load modeSettings[5][4] from Flash
+//--------------------------------------------------
+uint32_t LoadShuntValueFromFlash(MeterSettings *settings)
 {
-	ADC_ChannelConfTypeDef sConfig = {0};
+	uint8_t *src = (uint8_t*)FLASH_USER_PAGE_ADDR;
+	    memcpy(settings, src, sizeof(MeterSettings));
 
-	  sConfig.Channel = ADC_CHANNEL_2;
-	  sConfig.Rank = ADC_REGULAR_RANK_1;
-	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
-	HAL_ADC_Stop(&hadc1);
-
-	return adc_Value_1;
-}
-
-uint16_t ADC_Voltage(void)
-{
-	ADC_ChannelConfTypeDef sConfig = {0};
-
-	  sConfig.Channel = ADC_CHANNEL_1;
-	  sConfig.Rank = ADC_REGULAR_RANK_1;
-	  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-	  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	status = HAL_ADC_Start(&hadc1);
-	status = HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	adc_Value_1 = HAL_ADC_GetValue(&hadc1);
-	HAL_ADC_Stop(&hadc1);
-
-	return adc_Value_1;
-
+	    // If flash is empty, apply defaults
+	    if (*(uint64_t*)FLASH_USER_PAGE_ADDR == 0xFFFFFFFFFFFFFFFFULL) {
+	        settings->shuntValue = 2000;  // default
+	        uint8_t modeSettings[5][4] = {
+	            {2, 0, 0, 0},    // Default SHnt
+	            {0, 1, 0, 37},   // Default du1d
+	            {9, 6, 0, 0},    // Default bUAd
+	            {14, 30, 14, 23},// Default EVEn
+	            {34, 14, 5, 37}  // Default SAVE
+	        };
+	        memcpy(settings->modeSettings, modeSettings, sizeof(modeSettings));
+	    }
 }
 
 void CurrentValue ()
@@ -332,7 +305,7 @@ void CurrentValue ()
 	 if (current < 0.0f) current = 0.0f;
 
 	 // === Step 10: Clear Digits & DPs ===
-	 for (int i = 0; i < 4; i++) {
+	 for (int i = 4; i < 8; i++) {
 		 digits[i] = 0;
 		 digits[8 + i] = 0;
 	 }
@@ -344,36 +317,36 @@ void CurrentValue ()
 		     // Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
 		     val_int = (int)(display_current * 100 + 0.5f);  // e.g. 2.34 -> 234 (hundreds=tens etc.)
 
-		     digits[0] = (val_int / 100) % 10; // integer part
-		     digits[1] = (val_int / 10) % 10;  // first decimal
-		     digits[2] =  val_int % 10;        // second decimal
-		     digits[3] = 0;                    // optional: fill with fake digit if desired
+		     digits[4] = (val_int / 100) % 10; // integer part
+		     digits[5] = (val_int / 10) % 10;  // first decimal
+		     digits[6] =  val_int % 10;        // second decimal
+		     digits[7] = 0;                    // optional: fill with fake digit if desired
 
-		     digits[8] = 1;  // DP after first digit (X.XX)
+		     digits[12] = 1;  // DP after first digit (X.XX)
 		 }
 		 else if (display_current < 100.0f)
 		 {
 		     // Format: XX.XX (tens, ones, two decimals)
 		     val_int = (int)(display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
 
-		     digits[0] = (val_int / 1000) % 10; // tens
-		     digits[1] = (val_int / 100) % 10;  // ones
-		     digits[2] = (val_int / 10) % 10;   // first decimal
-		     digits[3] =  val_int % 10;         // second decimal
+		     digits[4] = (val_int / 1000) % 10; // tens
+		     digits[5] = (val_int / 100) % 10;  // ones
+		     digits[6] = (val_int / 10) % 10;   // first decimal
+		     digits[7] =  val_int % 10;         // second decimal
 
-		     digits[9] = 1;  // DP after second digit (XX.XX)
+		     digits[13] = 1;  // DP after second digit (XX.XX)
 		 }
 		 else
 		 {
 		     // Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
 		     val_int = (int)(display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
 
-		     digits[0] = (val_int / 1000) % 10; // hundreds
-		     digits[1] = (val_int / 100) % 10;  // tens
-		     digits[2] = (val_int / 10) % 10;   // ones
-		     digits[3] =  val_int % 10;         // first decimal
+		     digits[4] = (val_int / 1000) % 10; // hundreds
+		     digits[5] = (val_int / 100) % 10;  // tens
+		     digits[6] = (val_int / 10) % 10;   // ones
+		     digits[7] =  val_int % 10;         // first decimal
 
-		     digits[10] = 1;  // DP after third digit (XXX.X)
+		     digits[14] = 1;  // DP after third digit (XXX.X)
 		 }
 
 
@@ -524,6 +497,10 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM3_Init();
+
+  //LoadShuntValueFromFlash(&settings);
+
+
   /* USER CODE BEGIN 2 */
 
   if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK)
@@ -534,7 +511,7 @@ int main(void)
   status = HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
 
   digits[8]=1;
-  digits[13]=1;
+  digits[12]=1;
 
   /* USER CODE END 2 */
 
@@ -564,7 +541,7 @@ int main(void)
 	             {
 
 	            	 digits[8]=0;
-	            	 digits[13]=0;
+	            	 digits[12]=0;
 	            	 digits[9]=0;
 	            	 digits[10]=0;
 
@@ -592,28 +569,29 @@ int main(void)
 	         else
 	         {
 	             waitingFor2Sec = 0;
-	       	    HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
-
-	       	 if (flag1 == 1 )
-	       	 {
-	       	    CurrentValue();
-	       	   b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
-
-				 if (b1 == GPIO_PIN_RESET)
-				  {
-					 flag1 = 0;
-				  }
-	       	 }
-	       	 if (flag1 == 0)
-	       	 {
-	             VoltageValue ();
-	            b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
-
-	             if (b2 == GPIO_PIN_RESET)
-	             {
-	            	 flag1 = 1;
-	             }
-	       	 }
+	       	   HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
+	       	   CurrentValue();
+	       	   VoltageValue ();
+//	       	 if (flag1 == 1 )
+//	       	 {
+//	       	    CurrentValue();
+//	       	   b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+//
+//				 if (b1 == GPIO_PIN_RESET)
+//				  {
+//					 flag1 = 0;
+//				  }
+//	       	 }
+//	       	 if (flag1 == 0)
+//	       	 {
+//	             VoltageValue ();
+//	            b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+//
+//	             if (b2 == GPIO_PIN_RESET)
+//	             {
+//	            	 flag1 = 1;
+//	             }
+//	       	 }
 
 
 
@@ -690,8 +668,8 @@ int main(void)
 	                         blinkState = 0;
 	                         blinkTimer = HAL_GetTick();
 
-	                         const uint8_t defaultShnt[4] = {modeSettings[0][1], modeSettings[0][2], modeSettings[0][3], modeSettings[0][4]};
-	                         const uint8_t defaultDuid[4] = {0, 0, 0, 0};
+	                         const uint8_t defaultShnt[4] = {modeSettings[0][0], modeSettings[0][1], modeSettings[0][2], modeSettings[0][3]};
+	                         const uint8_t defaultDuid[4] = {modeSettings[1][0], modeSettings[1][1], modeSettings[1][2], 37 };
 
 	                         int localMode = 0; // Tracks what to show: 0 → SHnt, 1 → du1d, 2 → reset
 
@@ -748,7 +726,7 @@ int main(void)
 	                                 editMode = 0;
 	                                 blinkState = 0;
 	                                 digits[8]=1;
-	                                 digits[13]=1;
+	                                 digits[12]=1;
 
 	                                 // Clear screen
 	                                 for (int i = 0; i < 8; i++) digits[i] = 0;
@@ -798,11 +776,11 @@ int main(void)
 	   	         static uint8_t initialized = 0;
 	   	         if (!initialized)
 	   	         {
-	   	             const uint8_t defaultShnt[4] = {0, 7, 5, 9};
-	   	             const uint8_t defaultDuid[4] = {0, 0, 0, 0};
+	   	        	 const uint8_t defaultShnt[4] = {modeSettings[0][0], modeSettings[0][1], modeSettings[0][2], modeSettings[0][3]};
+	   	        	 const uint8_t defaultDuid[3] = {modeSettings[1][0], modeSettings[1][1], modeSettings[1][2]};
 
 	   	             memcpy(modeSettings[0], defaultShnt, 4);           // SHnt
-	   	             memcpy(modeSettings[1], defaultDuid, 4);            // du1d
+	   	             memcpy(modeSettings[1], defaultDuid, 3);            // du1d
 	   	             memcpy(modeSettings[2], baudModes[baudModeIndex], 4); // bUAd
 	   	             memcpy(modeSettings[3], partModes[partModeIndex], 4); // PArt
 	   	             memcpy(modeSettings[4], saveModes[saveToggle], 4);    // SAVE
@@ -865,6 +843,16 @@ int main(void)
 	   	                         if (settingDigits[currentDigitIndex] > 9)
 	   	                             settingDigits[currentDigitIndex] = 0;
 	   	                     }
+
+	   	                  else if (mode == 1)  // duid mode
+	   	                  {
+	   	                      // Only allow editing first 3 digits (0,1,2)
+	   	                      if (currentDigitIndex < 3) {
+	   	                          settingDigits[currentDigitIndex]++;
+	   	                          if (settingDigits[currentDigitIndex] > 9)
+	   	                              settingDigits[currentDigitIndex] = 0;
+	   	                      }
+	   	                  }
 
 	   	                     else if (mode == 2)  // bUAd
 	   	                     {
@@ -938,14 +926,22 @@ int main(void)
 	   	                     }
 	   	                     else
 	   	                     {
-	   	                         currentDigitIndex++;
-	   	                         if (currentDigitIndex >= 4)
-	   	                         {
-	   	                             currentDigitIndex = 0;
-	   	                             editMode = 0;
-	   	                             for (int i = 0; i < 4; i++)
-	   	                                 modeSettings[mode][i] = settingDigits[i];
-	   	                         }
+	   	                    	currentDigitIndex++;
+	   	                    	if (mode == 1 && currentDigitIndex >= 3)  // stop at digit 2
+	   	                    	{
+	   	                    	    currentDigitIndex = 0;
+	   	                    	    editMode = 0;
+	   	                    	    for (int i = 0; i < 3; i++)   // only save first 3 digits
+	   	                    	        modeSettings[mode][i] = settingDigits[i];
+	   	                    	}
+	   	                    	else if (mode != 1 && currentDigitIndex >= 4)
+	   	                    	{
+	   	                    	    currentDigitIndex = 0;
+	   	                    	    editMode = 0;
+	   	                    	    for (int i = 0; i < 4; i++)
+	   	                    	        modeSettings[mode][i] = settingDigits[i];
+	   	                    	}
+
 	   	                     }
 	   	                 }
 	   	                 else if (mode == 2 || mode == 3)
@@ -990,9 +986,12 @@ int main(void)
 	   	                                 currentDigitIndex = 0;
 	   	                                 initialized = 0;
 	   	                                 digits[8]=1;
-	   	                           	     digits[13]=1;
+	   	                           	     digits[12]=1;
 	   	                                 for (int i = 0; i < 8; i++) digits[i] = 0;
 	   	                                 HAL_Delay(300);
+
+	   	                                //SaveShuntValueToFlash(&settings);  //SAVE FLASH VALUES
+
 	   	                                 break;
 	   	                             }
 
