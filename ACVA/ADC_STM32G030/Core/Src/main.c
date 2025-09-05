@@ -52,48 +52,28 @@ TIM_HandleTypeDef htim3;
 #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
 #define VREFINT_CAL_VREF   3000UL   // mV
 
-static uint8_t cycle_count = 0;
 
 #define ADC_MIDPOINT       2050  // ~2048
 
-float offset_correction;
-float gain_correction;
-uint32_t sum = 0;
-float average = 0.0f;
-float corrected_1 = 0;
 
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint32_t vdda_mV = 0;       // calculated VDDA (mV)
 
 float voltage = 0.0f;
-#define OFFSET_ADC_Volt       3.75f
+
 #define ADC_HISTORY_LEN 2048
 
 uint16_t adc_history[ADC_HISTORY_LEN];  // stores last 100 samples
 uint16_t adc_history1[ADC_HISTORY_LEN];
 uint16_t adc_index = 0;                 // buffer index
-uint16_t adc_index1 = 0;
 
-int last_sample = 0;
-int current_sample = 0;
-
-uint32_t last_cross_time = 0;
-uint32_t period_accum = 0;
-
-int32_t sum_voltage = 0;
-int32_t sum_sq_voltage = 0;
-uint16_t sample_count = 0;
-
-float dc_offset = 0;
-float Vrms = 0;
-float Vpeak = 0;
 float frequency = 0;
 float Vrms_total = 0.0;
 float Vrms_AC =0.0f;
 float Vavg = 0.0;
 
 uint16_t AD_RES_BUFFER[3];
-volatile uint32_t sample_counter = 0;
+
 
 uint32_t AC_index = 0;
 uint16_t buffer_ready =0;
@@ -101,7 +81,8 @@ uint16_t buffer_ready =0;
 float value ;
 
 static float Vrms_filtered = 0;
-const float alpha = 0.25;  // 0 < alpha < 1, lower = smoother
+const float alpha = 0.1;  // 0 < alpha < 1, lower = smoother
+float threshold = 0.3f;
 
 /* USER CODE END PV */
 
@@ -147,7 +128,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	adc_index++;
 	if (adc_index >= ADC_HISTORY_LEN) {
 		adc_index = 0;  // wrap around
-//
 //		int max = adc_history[0];
 //	    for (int i = 1; i < adc_index; i++)
 //	    {
@@ -173,10 +153,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 		 Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
 
-		 for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		 		     sum_sq += (adc_history[i] - Vavg) * (adc_history[i] - Vavg);   // accumulate squared values
-		 		 }
+		 for (int i = 0; i < ADC_HISTORY_LEN; i++)
+		 {
+		 	 sum_sq += (adc_history[i] - Vavg) * (adc_history[i] - Vavg);   // accumulate squared values
+		 }
 
 		 float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
 
@@ -185,10 +165,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 		 Vrms_filtered = (alpha * Vrms_total) + ((1 - alpha) * Vrms_filtered);// total RMS (with DC)
 
-		 Vrms_AC = (Vrms_filtered) * 0.291;
+		  float Vrms_Constant = (Vrms_filtered) * 0.291;
+
+		    if (fabsf(Vrms_Constant - Vrms_AC) >= threshold)
+		    {
+		        Vrms_AC = Vrms_Constant;
+		    }
 
 		// float Vrms_ac    = sqrtf(fmaxf(0.0f, mean_sq - Vavg*Vavg)); // AC-only RMS
-	        buffer_ready = 0;
+	     buffer_ready = 0;
 	    }
 
 };
