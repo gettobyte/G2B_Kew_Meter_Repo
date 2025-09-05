@@ -571,7 +571,7 @@ int main(void)
 	             waitingFor2Sec = 0;
 	       	   HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
 	       	   CurrentValue();
-	       	   VoltageValue ();
+	       	   // VoltageValue ();
 //	       	 if (flag1 == 1 )
 //	       	 {
 //	       	    CurrentValue();
