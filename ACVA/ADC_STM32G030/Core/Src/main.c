@@ -24,6 +24,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "stdbool.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,27 +61,41 @@ uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint32_t vdda_mV = 0;       // calculated VDDA (mV)
 
 float voltage = 0.0f;
+float current = 0.0f;
 
-#define ADC_HISTORY_LEN 2048
+#define ADC_HISTORY_LEN 512
+#define ADC_HISTORY_LEN1 512
 
 uint16_t adc_history[ADC_HISTORY_LEN];  // stores last 100 samples
-uint16_t adc_history1[ADC_HISTORY_LEN];
+uint16_t adc_history1[ADC_HISTORY_LEN1];
 uint16_t adc_index = 0;                 // buffer index
+uint16_t adc_index1 = 0;
 
 float frequency = 0;
 float Vrms_total = 0.0;
 float Vrms_AC =0.0f;
+float Irms_total = 0.0;
+float Irms_AC =0.0f;
 float Vavg = 0.0;
+float Iavg = 0.0;
+
+float Power_Factor = 0.0;
 
 uint16_t AD_RES_BUFFER[3];
+//int TrueAC_Voltage[];
+//int TrueAC_Current[];
 
 
 uint32_t AC_index = 0;
 uint16_t buffer_ready =0;
+uint16_t buffer1_ready =0;
 
 float value ;
 
 static float Vrms_filtered = 0;
+static float Vrms_Constant = 0;
+
+static float Irms_filtered = 0;
 const float alpha = 0.1;  // 0 < alpha < 1, lower = smoother
 float threshold = 0.3f;
 
@@ -112,71 +127,145 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) AD_RES_BUFFER, 3UL);
 
-    adc_vrefint = AD_RES_BUFFER[2];   // internal bandgap reference
-	adc_vrefint = (adc_vrefint * 4095UL) / 65535UL; // for 16 bit resolution
-	uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
-
-	vdda_mV = (uint32_t) VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
-
-
-	voltage = (AD_RES_BUFFER[0] * vdda_mV) / 65535;
-
-
-	adc_history[adc_index] = voltage;
-	adc_index++;
-	if (adc_index >= ADC_HISTORY_LEN) {
-		adc_index = 0;  // wrap around
-//		int max = adc_history[0];
-//	    for (int i = 1; i < adc_index; i++)
-//	    {
-//	        if (adc_history[i] > max)
-//	            max = adc_history[i];
-//	    }
-//	     value = (float)max / sqrtf(2) ;
-//	     Vrms_filtered = alpha * value + (1.0f - alpha) * Vrms_filtered;
-		buffer_ready = 1;
-	}
-
-
-	 if (buffer_ready) {
-
-		 float sum = 0.0f;
-		 float sum_sq = 0.0f;
-
-		 // Step 1: Compute mean (DC offset) in volts
-		 for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		     sum += adc_history[i];
-		 }
-
-		 Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
-
-		 for (int i = 0; i < ADC_HISTORY_LEN; i++)
-		 {
-		 	 sum_sq += (adc_history[i] - Vavg) * (adc_history[i] - Vavg);   // accumulate squared values
-		 }
-
-		 float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
-
-		 // Step 2: Compute RMS values
-		 Vrms_total = sqrtf(mean_sq);
-
-		 Vrms_filtered = (alpha * Vrms_total) + ((1 - alpha) * Vrms_filtered);// total RMS (with DC)
-
-		  float Vrms_Constant = (Vrms_filtered) * 0.291;
-
-		    if (fabsf(Vrms_Constant - Vrms_AC) >= threshold)
-		    {
-		        Vrms_AC = Vrms_Constant;
-		    }
-
-		// float Vrms_ac    = sqrtf(fmaxf(0.0f, mean_sq - Vavg*Vavg)); // AC-only RMS
-	     buffer_ready = 0;
-	    }
 
 };
+
+void Calculate_Vrms()
+{
+	while(1){
+		    voltage = (AD_RES_BUFFER[0] * vdda_mV) / 65535;
+	        adc_history[adc_index] = voltage;
+			adc_index++;
+			if (adc_index >= ADC_HISTORY_LEN) {
+				adc_index = 0;  // wrap around
+				buffer_ready = 1;
+			}
+
+
+			 if (buffer_ready) {
+
+				 float sum = 0.0f;
+				 float sum_sq = 0.0f;
+
+		 		 // Step 1: Compute mean (DC offset) in volts
+				 for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+
+				     sum += adc_history[i];
+				 }
+
+   				 Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
+
+				 for (int i = 0; i < ADC_HISTORY_LEN; i++)
+				 {
+//					 TrueAC_Voltage[i] = adc_history[i] - Vavg;   // store AC sample
+				 	 sum_sq += (adc_history[i] - Vavg) * (adc_history[i] - Vavg);   // accumulate squared values
+				 }
+
+				 float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
+
+				 // Step 2: Compute RMS values
+				 Vrms_total = sqrtf(mean_sq);
+
+//				 Vrms_Constant = (Vrms_total) * 0.0013862;
+
+
+				    if (fabsf(Vrms_total - Vrms_AC) >= threshold)
+				    {
+				        Vrms_AC = Vrms_total;
+				    }
+
+				 Vrms_filtered = (alpha * Vrms_AC) + ((1 - alpha) * Vrms_filtered);// total RMS (with DC)
+				// float Vrms_ac    = sqrtf(fmaxf(0.0f, mean_sq - Vavg*Vavg)); // AC-only RMS
+			     buffer_ready = 0;
+			     break;
+			    }
+	   }
+}
+
+void Calculate_Irms()
+{
+	while(1){
+		current = (AD_RES_BUFFER[1] * vdda_mV) / 65535;
+	adc_history1[adc_index1] = current;
+			adc_index1++;
+
+			if (adc_index1 >= ADC_HISTORY_LEN1) {
+				adc_index1 = 0;  // wrap around
+				buffer1_ready = 1;
+			}
+
+			 if (buffer1_ready) {
+
+				 float sum = 0.0f;
+				 float sum_sq = 0.0f;
+
+				 // Step 1: Compute mean (DC offset) in volts
+				 for (int i = 0; i < ADC_HISTORY_LEN1; i++) {
+
+				     sum += adc_history1[i];
+				 }
+
+				 Iavg = sum / ADC_HISTORY_LEN1;     // DC offset (avg)
+
+				 for (int i = 0; i < ADC_HISTORY_LEN1; i++)
+				 {
+//					 TrueAC_Current[i] = adc_history1[i] - Iavg;
+				 	 sum_sq += (adc_history1[i] - Iavg) * (adc_history1[i] - Iavg);   // accumulate squared values
+				 }
+
+				 float mean_sq = sum_sq / ADC_HISTORY_LEN1; // <v^2>
+
+				 // Step 2: Compute RMS values
+				 Irms_total = sqrtf(mean_sq);
+
+
+//				  float Irms_Constant = (Irms_filtered) * 0.291;
+
+				    if (fabsf(Irms_total - Irms_AC) >= threshold)
+				    {
+				        Irms_AC = Irms_total;
+				    }
+
+				 Irms_filtered = (alpha * Irms_AC) + ((1 - alpha) * Irms_filtered);// total RMS (with DC)
+				// float Vrms_ac    = sqrtf(fmaxf(0.0f, mean_sq - Vavg*Vavg)); // AC-only RMS
+			     buffer1_ready = 0;
+			     break;
+			    }
+	}
+}
+
+float Calculate_Phase_Difference(void)
+{
+	 float sumV = 0, sumI = 0;
+	 float sumV2 = 0, sumI2 = 0, sumVI = 0;
+
+	    for (int n = 0; n < ADC_HISTORY_LEN; n++) {
+	        sumV += adc_history[n];
+	        sumI += adc_history1[n];
+	    }
+	    float offsetV = sumV / ADC_HISTORY_LEN;
+	    float offsetI = sumI / ADC_HISTORY_LEN;
+//
+//	    for (int n = 0; n < ADC_HISTORY_LEN; n++) {
+//	        float v = adc_history[n] - offsetV;
+//	        float i = adc_history1[n] - offsetI;
+//
+//	        sumV2 += v * v;
+//	        sumI2 += i * i;
+//	        sumVI += v * i;
+//	    }
+
+//	    float Vrms = sqrtf(sumV2 / ADC_HISTORY_LEN);
+//	    float Irms = sqrtf(sumI2 / ADC_HISTORY_LEN);
+
+	    float P    = Irms_filtered * Vrms_filtered;
+
+//	    float PF = P / (Vrms * Irms);
+
+	    return P;
+}
+
 
 /* USER CODE END 0 */
 
@@ -219,10 +308,11 @@ int main(void)
 
 //	    HAL_ADC_Start_DMA(&hadc1, (uint32_t*) AD_RES_BUFFER, 3UL);
 
-	    //HAL_TIM_Base_Start(&htim3);
+	    HAL_TIM_Base_Start(&htim3);
 
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) AD_RES_BUFFER, 3UL);
 //		HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-	    HAL_TIM_Base_Start_IT(&htim3);
+//      HAL_TIM_Base_Start_IT(&htim3);
 
 
 
@@ -235,8 +325,18 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+	    adc_vrefint = AD_RES_BUFFER[2];   // internal bandgap reference
+		adc_vrefint = (adc_vrefint * 4095UL) / 65535UL; // for 16 bit resolution
+		uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
 
-//
+		vdda_mV = (uint32_t) VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
+
+     	Calculate_Vrms();
+
+		Calculate_Irms();
+
+		Power_Factor = Calculate_Phase_Difference();
+
 	}
   /* USER CODE END 3 */
 }
@@ -317,8 +417,8 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 3;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T3_TRGO;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
@@ -404,16 +504,16 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 400;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -422,7 +522,6 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
-  HAL_TIM_MspPostInit(&htim3);
 
 }
 
