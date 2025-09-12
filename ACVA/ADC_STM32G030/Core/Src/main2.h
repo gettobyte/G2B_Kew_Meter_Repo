@@ -266,7 +266,7 @@ int main(void)
       {
           cycle_ready = 0;
 
-          const float fs = 25600.0f;     // 25.6 kHz
+          const float fs = 10000.0f;     // 10 kHz
           const float Ts = 1.0f / fs;    // 39.0625 us
           const float f  = 50.0f;        // mains
           const float T  = 1.0f / f;
@@ -317,9 +317,6 @@ int main(void)
           /* Simple active power estimate from displacement PF (no harmonics) */
           P_watts     = Vrms_volts * Irms_amps * PF;
 
-          /* You can print/log here if needed */
-          // printf("V=%.2f V, I=%.3f A, PF=%.3f, Phase=%.1f deg, %s\n",
-          //        Vrms_volts, Irms_amps, PF, Phase_deg, (LeadLag<0)?"LAG":"LEAD");
       }
   }
 }
