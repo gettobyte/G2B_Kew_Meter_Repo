@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">&#x0A;<refactoring comment="Rename resource &apos;DLMS_COSEM/DLMS_Dev/incn&apos; to &apos;inc&apos;" description="Rename resource &apos;incn&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="DLMS_Dev/incn" name="inc" stamp="1758003433658" updateReferences="true"/>&#x0A;<refactoring comment="Rename resource &apos;DLMS_COSEM/DLMS_Dev/inc&apos; to &apos;include&apos;" description="Rename resource &apos;inc&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="DLMS_Dev/inc" name="include" stamp="1758005039359" updateReferences="true"/>
+</session>

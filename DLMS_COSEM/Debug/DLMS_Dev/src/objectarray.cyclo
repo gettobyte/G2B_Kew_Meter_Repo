@@ -1,0 +1,17 @@
+../DLMS_Dev/src/objectarray.c:50:6:oa_init	1
+../DLMS_Dev/src/objectarray.c:60:6:oa_isAttached	1
+../DLMS_Dev/src/objectarray.c:65:10:oa_getCapacity	1
+../DLMS_Dev/src/objectarray.c:71:5:oa_capacity	6
+../DLMS_Dev/src/objectarray.c:125:6:oa_attach	1
+../DLMS_Dev/src/objectarray.c:135:5:oa_verify	4
+../DLMS_Dev/src/objectarray.c:169:5:oa_push	7
+../DLMS_Dev/src/objectarray.c:219:6:oa_copy	2
+../DLMS_Dev/src/objectarray.c:231:6:oa_move	2
+../DLMS_Dev/src/objectarray.c:247:6:oa_clear2	4
+../DLMS_Dev/src/objectarray.c:273:6:oa_clear	6
+../DLMS_Dev/src/objectarray.c:305:6:oa_empty	3
+../DLMS_Dev/src/objectarray.c:325:5:oa_getByIndex	2
+../DLMS_Dev/src/objectarray.c:339:5:oa_findBySN	4
+../DLMS_Dev/src/objectarray.c:365:5:oa_findByLN	7
+../DLMS_Dev/src/objectarray.c:394:5:oa_getObjects	7
+../DLMS_Dev/src/objectarray.c:429:5:oa_getObjects2	8

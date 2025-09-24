@@ -1,0 +1,5 @@
+../DLMS_Dev/src/serverevents.c:39:6:svr_notifyTrace	16	static
+../DLMS_Dev/src/serverevents.c:55:6:svr_notifyTrace2	24	static
+../DLMS_Dev/src/serverevents.c:72:6:svr_notifyTrace3	16	static
+../DLMS_Dev/src/serverevents.c:79:6:svr_notifyTrace4	16	static
+../DLMS_Dev/src/serverevents.c:87:6:svr_notifyTrace5	24	static

@@ -1,0 +1,43 @@
+12:22:11 **** Incremental Build of configuration Debug for project ADC_STM32G030 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0plus -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32G030xx -c -I../Core/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc -I../Drivers/STM32G0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32G0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c:49: warning: "VREFINT_CAL_ADDR" redefined
+   49 | #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
+      | 
+In file included from ../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal_adc.h:31,
+                 from ../Core/Inc/stm32g0xx_hal_conf.h:226,
+                 from ../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal.h:29,
+                 from ../Core/Inc/main.h:30,
+                 from ../Core/Src/main.c:20:
+../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_ll_adc.h:261: note: this is the location of the previous definition
+  261 | #define VREFINT_CAL_ADDR                   ((uint16_t*) (0x1FFF75AAUL)) /* Internal voltage reference, address of
+      | 
+../Core/Src/main.c:50: warning: "VREFINT_CAL_VREF" redefined
+   50 | #define VREFINT_CAL_VREF   3000000UL   // mV
+      | 
+../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_ll_adc.h:264: note: this is the location of the previous definition
+  264 | #define VREFINT_CAL_VREF                   ( 3000UL)                    /* Analog voltage reference (Vref+) value
+      | 
+../Core/Src/main.c: In function 'main':
+../Core/Src/main.c:146:36: warning: passing argument 2 of 'HAL_ADC_Start_DMA' from incompatible pointer type [-Wincompatible-pointer-types]
+  146 |          HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3UL);
+      |                                    ^~~~~~~~~~~~~
+      |                                    |
+      |                                    uint16_t * {aka short unsigned int *}
+../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal_adc.h:1877:78: note: expected 'uint32_t *' {aka 'long unsigned int *'} but argument is of type 'uint16_t *' {aka 'short unsigned int *'}
+ 1877 | HAL_StatusTypeDef       HAL_ADC_Start_DMA(ADC_HandleTypeDef *hadc, uint32_t *pData, uint32_t Length);
+      |                                                                    ~~~~~~~~~~^~~~~
+arm-none-eabi-gcc -o "ADC_STM32G030.elf" @"objects.list"   -mcpu=cortex-m0plus -T"C:\Users\singh\STM32CubeIDE\workspace_1.18.1\ADC_STM32G030\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ADC_STM32G030.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: ADC_STM32G030.elf
+ 
+arm-none-eabi-size  ADC_STM32G030.elf 
+arm-none-eabi-objdump -h -S ADC_STM32G030.elf  > "ADC_STM32G030.list"
+   text	   data	    bss	    dec	    hex	filename
+  15216	     12	   1796	  17024	   4280	ADC_STM32G030.elf
+Finished building: default.size.stdout
+ 
+Finished building: ADC_STM32G030.list
+ 
+
+12:22:12 Build Finished. 0 errors, 3 warnings. (took 1s.11ms)
+

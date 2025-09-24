@@ -1,0 +1,17 @@
+../DLMS_Dev/src/ciphering.c:60:22:AUTHENTICATION_KEY_SIZE	2
+../DLMS_Dev/src/ciphering.c:68:12:gxgcm_init	1
+../DLMS_Dev/src/ciphering.c:79:13:gxgcm_increaseBlockCounter	1
+../DLMS_Dev/src/ciphering.c:86:12:gxgcm_transformBlock	4
+../DLMS_Dev/src/ciphering.c:128:13:gxgcm_xor	2
+../DLMS_Dev/src/ciphering.c:138:13:gxgcm_shiftRight	4
+../DLMS_Dev/src/ciphering.c:165:13:gxgcm_multiplyH	5
+../DLMS_Dev/src/ciphering.c:197:13:gxgcm_getGHash	7
+../DLMS_Dev/src/ciphering.c:290:12:gxgcm_getTag	4
+../DLMS_Dev/src/ciphering.c:333:6:cip_init	1
+../DLMS_Dev/src/ciphering.c:360:6:cip_clear	2
+../DLMS_Dev/src/ciphering.c:388:12:cip_validateTag	4
+../DLMS_Dev/src/ciphering.c:431:5:cip_crypt	24
+../DLMS_Dev/src/ciphering.c:647:5:cip_encrypt	4
+../DLMS_Dev/src/ciphering.c:701:5:cip_decrypt	36
+../DLMS_Dev/src/ciphering.c:840:5:cip_encryptKey	13
+../DLMS_Dev/src/ciphering.c:892:5:cip_decryptKey	15

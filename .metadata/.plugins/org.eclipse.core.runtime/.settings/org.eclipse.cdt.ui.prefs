@@ -1,4 +1,6 @@
 eclipse.preferences.version=1
+formattingConfirmScopeForEmptySelection=false
+markOccurrences=false
 scalability.contentAssistAutoActivation=true
 scalability.enableAll=true
 scalability.numberOfLines=500000

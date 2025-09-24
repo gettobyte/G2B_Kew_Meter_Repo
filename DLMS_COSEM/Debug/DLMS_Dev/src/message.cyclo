@@ -1,0 +1,4 @@
+../DLMS_Dev/src/message.c:47:6:mes_init	1
+../DLMS_Dev/src/message.c:56:6:mes_attach	1
+../DLMS_Dev/src/message.c:68:5:mes_push	6
+../DLMS_Dev/src/message.c:119:6:mes_clear	5

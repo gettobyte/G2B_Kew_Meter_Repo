@@ -1,0 +1,9 @@
+../DLMS_Dev/src/notify.c:47:5:notify_getData	24	static
+../DLMS_Dev/src/notify.c:55:5:notify_addData	112	static
+../DLMS_Dev/src/notify.c:88:5:notify_generateDataNotificationMessages2	136	static
+../DLMS_Dev/src/notify.c:119:5:notify_generateDataNotificationMessages	56	static
+../DLMS_Dev/src/notify.c:164:5:notify_generateEventNotificationMessages	112	static
+../DLMS_Dev/src/notify.c:219:5:notify_generateEventNotificationMessages2	104	static
+../DLMS_Dev/src/notify.c:251:5:notify_generatePushSetupMessages	144	static
+../DLMS_Dev/src/notify.c:382:5:notify_parsePush	144	static
+../DLMS_Dev/src/notify.c:485:5:notify_getPushValues	128	static
