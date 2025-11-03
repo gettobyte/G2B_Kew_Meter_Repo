@@ -18,11 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stdio.h"
-#include "string.h"
-#include <stdbool.h>  // for bool, true, false
-#include <math.h>     // for fabsf
-#include <stdint.h>   // for uint8_t, int32_t, etc.
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -39,7 +34,6 @@
 
 #define SAMPLES 1024.0f
 
-#define SMOOTHING_SHIFT 3
 
 #define BUTTON1_Pin GPIO_PIN_7
 #define BUTTON1_GPIO_Port GPIOA
@@ -47,15 +41,12 @@
 #define BUTTON2_Pin GPIO_PIN_0
 #define BUTTON2_GPIO_Port GPIOB
 
-#define alpha                0.1f   // Smoothing factor
-#define OFFSET_ADC_Curr       3.75f      // Offset (at 0 A)
+
 #define OFFSET_ADC_Volt       5.0f
 
 #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
 #define VREFINT_CAL_VREF   3000UL   // mV
 
-#define ADC_RESOLUTION      4095.0f
-#define AMPLIFIER_GAIN       50.0f // Adjust if your INA180 is A1 (20), A2 (50), A3 (100), A4 (200)
 
 #define FLASH_USER_PAGE_ADDR   0x0800F800  // Last page
 #define FLASH_USER_PAGE_SIZE   2048
@@ -125,12 +116,14 @@ float current = 0;
 
 float corrected_V = 0;
 
+float display_current =0;
+
 static float ema_current = 0.0f;
 const float EMA_ALPHA = 0.01f; // smoothing factor (0.01 = very stable, 0.2 = faster response)
 
 /* --- Stable display logic with hysteresis --- */
 static float last_display_current = 0.0f;
-const float DISPLAY_THRESHOLD = 1.0f;   // 100 mV stability band
+const float DISPLAY_THRESHOLD = 0.5f;   // 100 mV stability band
 
 int16_t corrected_A = 0;
 
@@ -269,15 +262,16 @@ void CurrentValue() {
 	}
 
 	average_C = sum_C / SAMPLES;
+
 	cv_ref = ref_thresh / SAMPLES;
 
 	//corrected_A = (average_C > OFFSET_ADC_Curr) ? (average_C - OFFSET_ADC_Curr) : 0;
 
-	adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
+	adc_vrefint = AD_RES_BUFFER[2] ; //fixed bandgap reference inside the chip
 
 	uint16_t vrefint_cal = *VREFINT_CAL_ADDR;
 
-	vdda_mV = (uint32_t) VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
+	vdda_mV = (uint32_t) VREFINT_CAL_VREF * vrefint_cal /adc_vrefint;
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,48 +286,68 @@ void CurrentValue() {
 	float v_diff_mV = (float)delta_code * ((float)vdda_mV / 4095.0f);
 
 
-	current = v_diff_mV / (INA_gain * R_shunt);
-
+	current = (v_diff_mV / (INA_gain * R_shunt));
 
 	if (current >= 0.0f) {
-
-		if (current < 50.0f) {
-	        // 0..50 A
-	        current = 0.96154f * current + 3.895f;
-	    } else if (current < 100.0f) {
-	        // 50..100 A
-	        current = 1.00679f * current - 0.936f;
-	    } else if (current < 150.0f) {
-	        // 100..150 A
-	        current = 0.98765f * current + 7.345f;
-	    } else {
-	        // 150..200+ A
-	        current = 1.12994f * current - 16.60f;
-	    }
+	    if (current <= 18.60f)        current = current * 0.9737098345f + 1.8889970789f;  // 8.33..18.60
+	    else if (current <= 39.30f)   current = current * 0.9661835749f + 2.0289855073f;  // 18.60..39.30
+	    else if (current <= 78.04f)   current = current * 1.32406497f - 24.428997f;  // 39.30..78.04
+	    else if (current <= 110.30f)  current = current * 0.8566227648f + 12.438162544f; // 78.04..110.30  (hits +45→120)
+	    else if (current <= 158.80f)  current = current * 1.1111112f - 10.0f; // 110.30..158.80
+	    else                          current = current * 1.2048192771f - 31.3253012050f; // 158.80..192.00 and above
 	} else {
-		if (current > -50.0f) {
-		    // ~0..50 A (e.g., -3.7mV≈10 A, -7.5mV≈20 A, -15mV≈40 A)
-		    current = 0.93514f * current + 4.655f;
-		}
-		else if (current > -100.0f) {
-		    // 50..100 A (anchor around measured ~62.6 -> 80 target, continuous at 50 A)
-		    current = 3.00782f * current + 108.289f;
-		}
-		else if (current > -150.0f) {
-		    // 100..150 A (e.g., ~93.5 -> 120 target)
-		    current = 0.79450f * current + 1.036f;
-		}
-		else {
-		    // ≥150 A (e.g., ~123.2 -> 160, ~157 -> 200)
-		    current = 0.98343f * current - 12.201f;
-		}
+	    // work on magnitude, then restore sign (still only 'current')
+	    current = -current;
+	    if (current <= 152.0f)        current = current * 1.0526315789f + 0.0f;            // 0..152  (0→0, 152→160)
+	    else if (current <= 27.36f)   current = current * 0.81765353f + 4.29566611f;
+	    else if (current <= 11.30f)   current = current * 1.17994100f + 0.00000000f;  // 0..11.3 → 0..13.333
+	    else if (current <= 6.82f)    current = current * 1.44812673f + 0.0f;
+	    else                          current = current * 1.0000000000f + 8.0f;            // 152..192+ (152→160, 192→200)
 
+	    current = -current;
 	}
+//	current = current * 0.96517f + 0.67488f;
+
+//
+//	if (current >= 0.0f) {
+//
+//		if (current < 50.0f) {
+//	        // 0..50 A
+//	        current = 0.96154f * current + 3.895f;
+//	    } else if (current < 100.0f) {
+//	        // 50..100 A
+//	        current = 1.00679f * current - 0.936f;
+//	    } else if (current < 150.0f) {
+//	        // 100..150 A
+//	        current = 0.98765f * current + 7.345f;
+//	    } else {
+//	        // 150..200+ A
+//	        current = 1.12994f * current - 16.60f;
+//	    }
+//	} else {
+//		if (current > -50.0f) {
+//		    // ~0..50 A (e.g., -3.7mV≈10 A, -7.5mV≈20 A, -15mV≈40 A)
+//		    current = 0.93514f * current + 4.655f;
+//		}
+//		else if (current > -100.0f) {
+//		    // 50..100 A (anchor around measured ~62.6 -> 80 target, continuous at 50 A)
+//		    current = 3.00782f * current + 108.289f;
+//		}
+//		else if (current > -150.0f) {
+//		    // 100..150 A (e.g., ~93.5 -> 120 target)
+//		    current = 0.79450f * current + 1.036f;
+//		}
+//		else {
+//		    // ≥150 A (e.g., ~123.2 -> 160, ~157 -> 200)
+//		    current = 0.98343f * current - 12.201f;
+//		}
+//
+//	}
 	// Optional: small zero band after calibration (helps flicker & rounding)
-	const float ZERO_BAND_A = 0.05f; // 50 mA
-	if (current > -ZERO_BAND_A && current < ZERO_BAND_A) {
-	    current = 0.0f;
-	}
+//	const float ZERO_BAND_A = 0.05f; // 50 mA
+//	if (current > -ZERO_BAND_A && current < ZERO_BAND_A) {
+//	    current = 0.0f;
+//	}
 
 	// --- LED polarity indication *after* calibration ---
 	// Negative current -> LED ON; Positive/Zero -> LED OFF
@@ -352,7 +366,7 @@ void CurrentValue() {
 		last_display_current = ema_current;
 	}
 
-	float display_current = last_display_current;
+	 display_current = last_display_current;
 
 
 	float abs_curr = fabsf(display_current);
@@ -440,7 +454,7 @@ void VoltageValue() {
 
 	/* --- Stable display logic with hysteresis --- */
 	static float last_display_voltage = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.05f;  // tighter update band (50 mV)
+	const float DISPLAY_THRESHOLD = 0.8f;  // tighter update band (50 mV)
 
 	if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD) {
 	    last_display_voltage = ema_voltage;
@@ -450,7 +464,7 @@ void VoltageValue() {
 	float display_voltage = last_display_voltage;
 
 	// After computing display_voltage
-	if (fabsf(display_voltage) <= 0.2f)   // anything below 50 mV = 0.00
+	if (fabsf(display_voltage) <= 0.3f)   // anything below 50 mV = 0.00
 		display_voltage = 0.0f;
 
 	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
@@ -523,7 +537,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -1115,6 +1129,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -1124,6 +1139,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_VREFINT;
   sConfig.Rank = ADC_REGULAR_RANK_3;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
