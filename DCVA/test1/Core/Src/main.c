@@ -18,6 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stdio.h"
+#include "string.h"
+#include <stdbool.h>  // for bool, true, false
+#include <math.h>     // for fabsf
+#include <stdint.h>   // for uint8_t, int32_t, etc.
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -107,6 +112,10 @@ uint32_t sum_V = 0;
 
 uint32_t sum_C = 0;
 
+float cv_ref = 0;
+
+uint32_t ref_thresh = 0;
+
 float average_V = 0;
 
 float average_C = 0;
@@ -116,11 +125,18 @@ float current = 0;
 
 float corrected_V = 0;
 
+static float ema_current = 0.0f;
+const float EMA_ALPHA = 0.01f; // smoothing factor (0.01 = very stable, 0.2 = faster response)
+
+/* --- Stable display logic with hysteresis --- */
+static float last_display_current = 0.0f;
+const float DISPLAY_THRESHOLD = 1.0f;   // 100 mV stability band
+
 int16_t corrected_A = 0;
 
 int val_int;
 
-float ema_current = 0;
+
 float ema_voltage = 0;
 
 float offset_correction;
@@ -129,7 +145,7 @@ float gain_correction;
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint32_t vdda_mV = 0;       // calculated VDDA (mV)
 
-uint16_t AD_RES_BUFFER[3];
+uint16_t AD_RES_BUFFER[4];
 
 const uint8_t modeLabels[5][4] = { { 28, 17, 23, 29 }, // SHnt
 		{ 13, 30, 1, 13 },  // du1d
@@ -234,21 +250,28 @@ void CurrentValue() {
 			+ ((float) modeSettings[0][2] * 1.0f)
 			+ ((float) modeSettings[0][3] * 0.1f);
 	float shunt_mV = 75.0f;    // default 75 mV
-	float INA_gain = 20.0f;    // INA180 gain (fixed)
+	float INA_gain = 20.0f;    // INA181 gain (fixed)
 
 	// Derived shunt resistance
 	float R_shunt = (shunt_mV) / shunt_A;  // mOhms
 	sum_C = 0;
+	ref_thresh = 0;
+
+	  //cv_ref = AD_RES_BUFFER[3];
+
+	 // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1,GPIO_PIN_SET);
 
 	for (uint16_t i = 0; i < SAMPLES; i++) {
-		HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
+		HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 4);
 		//adcBuffer_C[i] = AD_RES_BUFFER[1];   // save each sample in buffer
 		sum_C += AD_RES_BUFFER[1];         // also sum if you still need average
+		ref_thresh += AD_RES_BUFFER[3];
 	}
 
 	average_C = sum_C / SAMPLES;
+	cv_ref = ref_thresh / SAMPLES;
 
-	corrected_A = (average_C > OFFSET_ADC_Curr) ? (average_C - OFFSET_ADC_Curr) : 0;
+	//corrected_A = (average_C > OFFSET_ADC_Curr) ? (average_C - OFFSET_ADC_Curr) : 0;
 
 	adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
 
@@ -256,23 +279,74 @@ void CurrentValue() {
 
 	vdda_mV = (uint32_t) VREFINT_CAL_VREF * vrefint_cal / adc_vrefint;
 
-	float v_adc = (corrected_A * vdda_mV) / 4095;
+	/////////////////////////////////////////////////////////////////////////////////////////////////
 
-	current = ((v_adc) / (INA_gain * R_shunt));
+//	float v_adc = (corrected_A * vdda_mV) / 4095;
+//
+//	current = ((v_adc) / (INA_gain * R_shunt));
 
-	gain_correction = 1.034f;    // Adjust this based on your observed error
-	offset_correction = 0.0f; // Optional fine offset if needed
+	// --- Delta between INA output and REF (use averaged codes) ---
+	int32_t delta_code = (int32_t)average_C  -  (int32_t)cv_ref ;
 
-	current = (current * gain_correction) + offset_correction;
+	// ADC codes -> millivolts
+	float v_diff_mV = (float)delta_code * ((float)vdda_mV / 4095.0f);
 
-	static float ema_current = 0.0f;
-	const float EMA_ALPHA = 0.01f; // smoothing factor (0.01 = very stable, 0.2 = faster response)
+
+	current = v_diff_mV / (INA_gain * R_shunt);
+
+
+	if (current >= 0.0f) {
+
+		if (current < 50.0f) {
+	        // 0..50 A
+	        current = 0.96154f * current + 3.895f;
+	    } else if (current < 100.0f) {
+	        // 50..100 A
+	        current = 1.00679f * current - 0.936f;
+	    } else if (current < 150.0f) {
+	        // 100..150 A
+	        current = 0.98765f * current + 7.345f;
+	    } else {
+	        // 150..200+ A
+	        current = 1.12994f * current - 16.60f;
+	    }
+	} else {
+		if (current > -50.0f) {
+		    // ~0..50 A (e.g., -3.7mV≈10 A, -7.5mV≈20 A, -15mV≈40 A)
+		    current = 0.93514f * current + 4.655f;
+		}
+		else if (current > -100.0f) {
+		    // 50..100 A (anchor around measured ~62.6 -> 80 target, continuous at 50 A)
+		    current = 3.00782f * current + 108.289f;
+		}
+		else if (current > -150.0f) {
+		    // 100..150 A (e.g., ~93.5 -> 120 target)
+		    current = 0.79450f * current + 1.036f;
+		}
+		else {
+		    // ≥150 A (e.g., ~123.2 -> 160, ~157 -> 200)
+		    current = 0.98343f * current - 12.201f;
+		}
+
+	}
+	// Optional: small zero band after calibration (helps flicker & rounding)
+	const float ZERO_BAND_A = 0.05f; // 50 mA
+	if (current > -ZERO_BAND_A && current < ZERO_BAND_A) {
+	    current = 0.0f;
+	}
+
+	// --- LED polarity indication *after* calibration ---
+	// Negative current -> LED ON; Positive/Zero -> LED OFF
+
+
 
 	ema_current = ema_current + EMA_ALPHA * (current - ema_current);
 
-	/* --- Stable display logic with hysteresis --- */
-	static float last_display_current = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.1f;   // 100 mV stability band
+	if (ema_current < 0.0f) {
+	    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);     // ON for negative
+	} else {
+	    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);   // OFF for positive/zero
+	}
 
 	if (fabsf(ema_current - last_display_current) >= DISPLAY_THRESHOLD) {
 		last_display_current = ema_current;
@@ -280,47 +354,51 @@ void CurrentValue() {
 
 	float display_current = last_display_current;
 
-	// === Step 9: Clamp and Prepare Current ===
-	//if (current > 200.0f) current = 200.0f;
-	if (current < 0.0f)
-		current = 0.0f;
 
-	// === Step 10: Clear Digits & DPs ===
-	for (int i = 4; i < 8; i++) {
-		digits[i] = 0;
-		digits[8 + i] = 0;
+	float abs_curr = fabsf(display_current);
+
+	if (abs_curr < 5.0)
+	{
+		abs_curr = 0.0f;
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
 	}
 
-	if (display_current < 10.0f) {
-		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
-		val_int = (int) (display_current * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+	// === Clear digits & DP flags ===
+	for (int i = 4; i < 8; i++) {
+	    digits[i] = 0;
+	    digits[8 + i] = 0;
+	}
+	digits[12] = 0;  // DP after first digit
+	digits[13] = 0;  // DP after second digit
+	digits[14] = 0;  // DP after third digit
 
-		digits[4] = (val_int / 100) % 10; // integer part
-		digits[5] = (val_int / 10) % 10;  // first decimal
-		digits[6] = val_int % 10;        // second decimal
-		digits[7] = 0;              // optional: fill with fake digit if desired
+	// === Format magnitude (identical layout for pos/neg) ===
+	int val_int;
+	if (abs_curr < 10.0f) {
+	    // X.XX
+	    val_int = (int)(abs_curr * 100.0f + 0.5f);   // e.g. 2.34 -> 234
+	    digits[4] = (val_int / 100) % 10;            // integer part
+	    digits[5] = (val_int / 10)  % 10;            // first decimal
+	    digits[6] =  val_int        % 10;            // second decimal
+	    digits[12] = 1;                               // DP after first digit (X.XX)
 
-		digits[12] = 1;  // DP after first digit (X.XX)
-	} else if (display_current < 100.0f) {
-		// Format: XX.XX (tens, ones, two decimals)
-		val_int = (int) (display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
+	} else if (abs_curr < 100.0f) {
+	    // XX.XX
+	    val_int = (int)(abs_curr * 100.0f + 0.5f);   // e.g. 23.45 -> 2345
+	    digits[4] = (val_int / 1000) % 10;           // tens
+	    digits[5] = (val_int / 100)  % 10;           // ones
+	    digits[6] = (val_int / 10)   % 10;           // first decimal
+	    digits[7] =  val_int         % 10;           // second decimal
+	    digits[13] = 1;                               // DP after second digit (XX.XX)
 
-		digits[4] = (val_int / 1000) % 10; // tens
-		digits[5] = (val_int / 100) % 10;  // ones
-		digits[6] = (val_int / 10) % 10;   // first decimal
-		digits[7] = val_int % 10;         // second decimal
-
-		digits[13] = 1;  // DP after second digit (XX.XX)
 	} else {
-		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
-		val_int = (int) (display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
-
-		digits[4] = (val_int / 1000) % 10; // hundreds
-		digits[5] = (val_int / 100) % 10;  // tens
-		digits[6] = (val_int / 10) % 10;   // ones
-		digits[7] = val_int % 10;         // first decimal
-
-		digits[14] = 1;  // DP after third digit (XXX.X)
+	    // XXX.X
+	    val_int = (int)(abs_curr * 10.0f + 0.5f);    // e.g. 123.4 -> 1234
+	    digits[4] = (val_int / 1000) % 10;           // hundreds
+	    digits[5] = (val_int / 100)  % 10;           // tens
+	    digits[6] = (val_int / 10)   % 10;           // ones
+	    digits[7] =  val_int         % 10;           // first decimal
+	    digits[14] = 1;                               // DP after third digit (XXX.X)
 	}
 
 }
@@ -329,7 +407,7 @@ void VoltageValue() {
 	sum_V = 0;
 
 	for (uint16_t i = 0; i < SAMPLES; i++) {
-		HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 2);
+		HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 4);
 		//adcBuffer_V[i] = AD_RES_BUFFER[0];   // save each sample in buffer
 		sum_V += AD_RES_BUFFER[0];               // also sum if you still need
 
@@ -393,10 +471,10 @@ void VoltageValue() {
 		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
 		val_int = (int) (display_voltage * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
 
-		digits[0] = (val_int / 100) % 10; // integer part
-		digits[1] = (val_int / 10) % 10;  // first decimal
-		digits[2] = val_int % 10;        // second decimal
-		digits[3] = 0;              // optional: fill with fake digit if desired
+		digits[0] = (val_int / 100) % 10;  // integer part
+		digits[1] = (val_int / 10) % 10;   // first decimal
+		digits[2] = val_int % 10;          // second decimal
+		digits[3] = 0;                     // optional: fill with fake digit if desired
 
 		digits[8] = 1;  // DP after first digit (X.XX)
 	} else if (display_voltage < 100.0f) {
@@ -432,37 +510,38 @@ void VoltageValue() {
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
 
-	/* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_DMA_Init();
-	MX_ADC1_Init();
-	MX_TIM3_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_ADC1_Init();
+  MX_TIM3_Init();
+  /* USER CODE BEGIN 2 */
 
 	if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) {
 		Error_Handler();
@@ -473,14 +552,14 @@ int main(void) {
 	digits[8] = 1;
 	digits[12] = 1;
 
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1) {
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 
 		GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
 		GPIO_PinState b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
@@ -519,7 +598,7 @@ int main(void) {
 				}
 			} else {
 				waitingFor2Sec = 0;
-				HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 3);
+				HAL_ADC_Start_DMA(&hadc1, AD_RES_BUFFER, 4);
 				CurrentValue();
 				VoltageValue();
 			}
@@ -930,273 +1009,299 @@ int main(void) {
 ////////////////////////////////////////////////////////////////////////////
 
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-	/** Configure the main internal regulator output voltage
-	 */
-	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Configure the main internal regulator output voltage
+  */
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-	RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
-	RCC_OscInitStruct.PLL.PLLN = 8;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
-	RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
+  RCC_OscInitStruct.PLL.PLLN = 8;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
-		Error_Handler();
-	}
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
- * @brief ADC1 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_ADC1_Init(void) {
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
 
-	/* USER CODE BEGIN ADC1_Init 0 */
+  /* USER CODE BEGIN ADC1_Init 0 */
 
-	/* USER CODE END ADC1_Init 0 */
+  /* USER CODE END ADC1_Init 0 */
 
-	ADC_ChannelConfTypeDef sConfig = { 0 };
+  ADC_ChannelConfTypeDef sConfig = {0};
 
-	/* USER CODE BEGIN ADC1_Init 1 */
+  /* USER CODE BEGIN ADC1_Init 1 */
 
-	/* USER CODE END ADC1_Init 1 */
+  /* USER CODE END ADC1_Init 1 */
 
-	/** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-	 */
-	hadc1.Instance = ADC1;
-	hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-	hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-	hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-	hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-	hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-	hadc1.Init.LowPowerAutoWait = DISABLE;
-	hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-	hadc1.Init.ContinuousConvMode = DISABLE;
-	hadc1.Init.NbrOfConversion = 3;
-	hadc1.Init.DiscontinuousConvMode = ENABLE;
-	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-	hadc1.Init.DMAContinuousRequests = ENABLE;
-	hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
-	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
-	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
-	hadc1.Init.OversamplingMode = DISABLE;
-	hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
-	if (HAL_ADC_Init(&hadc1) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.DiscontinuousConvMode = ENABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Configure Regular Channel
-	 */
-	sConfig.Channel = ADC_CHANNEL_1;
-	sConfig.Rank = ADC_REGULAR_RANK_1;
-	sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Configure Regular Channel
-	 */
-	sConfig.Channel = ADC_CHANNEL_2;
-	sConfig.Rank = ADC_REGULAR_RANK_2;
-	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Configure Regular Channel
-	 */
-	sConfig.Channel = ADC_CHANNEL_VREFINT;
-	sConfig.Rank = ADC_REGULAR_RANK_3;
-	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN ADC1_Init 2 */
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/* USER CODE END ADC1_Init 2 */
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
 
-}
-
-/**
- * @brief TIM3 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_TIM3_Init(void) {
-
-	/* USER CODE BEGIN TIM3_Init 0 */
-
-	/* USER CODE END TIM3_Init 0 */
-
-	TIM_ClockConfigTypeDef sClockSourceConfig = { 0 };
-	TIM_MasterConfigTypeDef sMasterConfig = { 0 };
-	TIM_OC_InitTypeDef sConfigOC = { 0 };
-
-	/* USER CODE BEGIN TIM3_Init 1 */
-
-	/* USER CODE END TIM3_Init 1 */
-	htim3.Instance = TIM3;
-	htim3.Init.Prescaler = 1;
-	htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-	htim3.Init.Period = 32768;
-	htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-	htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-	if (HAL_TIM_Base_Init(&htim3) != HAL_OK) {
-		Error_Handler();
-	}
-	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-	if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_TIM_OC_Init(&htim3) != HAL_OK) {
-		Error_Handler();
-	}
-	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-	sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-	if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	sConfigOC.OCMode = TIM_OCMODE_TIMING;
-	sConfigOC.Pulse = 0;
-	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-	if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN TIM3_Init 2 */
-
-	/* USER CODE END TIM3_Init 2 */
+  /* USER CODE END ADC1_Init 2 */
 
 }
 
 /**
- * Enable DMA controller clock
- */
-static void MX_DMA_Init(void) {
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
 
-	/* DMA controller clock enable */
-	__HAL_RCC_DMA1_CLK_ENABLE();
+  /* USER CODE BEGIN TIM3_Init 0 */
 
-	/* DMA interrupt init */
-	/* DMA1_Channel1_IRQn interrupt configuration */
-	HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 1;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 32768;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
-static void MX_GPIO_Init(void) {
-	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
-	/* USER CODE BEGIN MX_GPIO_Init_1 */
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
 
-	/* USER CODE END MX_GPIO_Init_1 */
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
-	/* GPIO Ports Clock Enable */
-	__HAL_RCC_GPIOB_CLK_ENABLE();
-	__HAL_RCC_GPIOA_CLK_ENABLE();
-	__HAL_RCC_GPIOC_CLK_ENABLE();
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
-	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOB,
-			C_D4_Pin | LED_Pin | B_Pin | C_D1_Pin | E_Pin | D_Pin | DP_Pin
-					| C_Pin | G_Pin, GPIO_PIN_RESET);
+}
 
-	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOA,
-			C_D3_Pin | V_D3_Pin | V_D2_Pin | A_Pin | V_D1_Pin | V_D4_Pin
-					| C_D2_Pin, GPIO_PIN_RESET);
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
 
-	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(F_GPIO_Port, F_Pin, GPIO_PIN_RESET);
+  /* USER CODE END MX_GPIO_Init_1 */
 
-	/*Configure GPIO pins : C_D4_Pin G_Pin */
-	GPIO_InitStruct.Pin = C_D4_Pin | G_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
-	/*Configure GPIO pins : C_D3_Pin V_D2_Pin A_Pin V_D1_Pin
-	 V_D4_Pin */
-	GPIO_InitStruct.Pin = C_D3_Pin | V_D2_Pin | A_Pin | V_D1_Pin | V_D4_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, C_D4_Pin|B_Pin|C_D1_Pin|E_Pin
+                          |D_Pin|DP_Pin|C_Pin|G_Pin, GPIO_PIN_RESET);
 
-	/*Configure GPIO pins : C_ref_Pin SW_1_Pin */
-	GPIO_InitStruct.Pin = C_ref_Pin | SW_1_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, C_D3_Pin|V_D3_Pin|V_D2_Pin|A_Pin
+                          |V_D1_Pin|V_D4_Pin|C_D2_Pin, GPIO_PIN_RESET);
 
-	/*Configure GPIO pin : SW_2_Pin */
-	GPIO_InitStruct.Pin = SW_2_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(SW_2_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 
-	/*Configure GPIO pins : LED_Pin B_Pin C_D1_Pin E_Pin
-	 D_Pin DP_Pin C_Pin */
-	GPIO_InitStruct.Pin = LED_Pin | B_Pin | C_D1_Pin | E_Pin | D_Pin | DP_Pin
-			| C_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(F_GPIO_Port, F_Pin, GPIO_PIN_RESET);
 
-	/*Configure GPIO pins : V_D3_Pin C_D2_Pin */
-	GPIO_InitStruct.Pin = V_D3_Pin | C_D2_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pins : C_D4_Pin G_Pin */
+  GPIO_InitStruct.Pin = C_D4_Pin|G_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	/*Configure GPIO pin : F_Pin */
-	GPIO_InitStruct.Pin = F_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	HAL_GPIO_Init(F_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pins : C_D3_Pin V_D2_Pin A_Pin V_D1_Pin
+                           V_D4_Pin */
+  GPIO_InitStruct.Pin = C_D3_Pin|V_D2_Pin|A_Pin|V_D1_Pin
+                          |V_D4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-	/* USER CODE BEGIN MX_GPIO_Init_2 */
+  /*Configure GPIO pin : SW_1_Pin */
+  GPIO_InitStruct.Pin = SW_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(SW_1_GPIO_Port, &GPIO_InitStruct);
 
-	/* USER CODE END MX_GPIO_Init_2 */
+  /*Configure GPIO pin : SW_2_Pin */
+  GPIO_InitStruct.Pin = SW_2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(SW_2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_Pin B_Pin C_D1_Pin E_Pin
+                           D_Pin DP_Pin C_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|B_Pin|C_D1_Pin|E_Pin
+                          |D_Pin|DP_Pin|C_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : V_D3_Pin C_D2_Pin */
+  GPIO_InitStruct.Pin = V_D3_Pin|C_D2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : F_Pin */
+  GPIO_InitStruct.Pin = F_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(F_GPIO_Port, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -1204,16 +1309,17 @@ static void MX_GPIO_Init(void) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
 /**
