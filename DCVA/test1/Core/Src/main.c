@@ -114,12 +114,14 @@ float average_C = 0;
 float voltage = 0;
 float current = 0;
 
+float display_voltage = 0;
+
 float corrected_V = 0;
 
 float display_current =0;
 
 static float ema_current = 0.0f;
-const float EMA_ALPHA = 0.01f; // smoothing factor (0.01 = very stable, 0.2 = faster response)
+const float EMA_ALPHA = 0.05f; // smoothing factor (0.01 = very stable, 0.2 = faster response)
 
 /* --- Stable display logic with hysteresis --- */
 static float last_display_current = 0.0f;
@@ -288,69 +290,6 @@ void CurrentValue() {
 
 	current = (v_diff_mV / (INA_gain * R_shunt));
 
-	if (current >= 0.0f) {
-	    if (current <= 18.60f)        current = current * 0.9737098345f + 1.8889970789f;  // 8.33..18.60
-	    else if (current <= 39.30f)   current = current * 0.9661835749f + 2.0289855073f;  // 18.60..39.30
-	    else if (current <= 78.04f)   current = current * 1.32406497f - 24.428997f;  // 39.30..78.04
-	    else if (current <= 110.30f)  current = current * 0.8566227648f + 12.438162544f; // 78.04..110.30  (hits +45→120)
-	    else if (current <= 158.80f)  current = current * 1.1111112f - 10.0f; // 110.30..158.80
-	    else                          current = current * 1.2048192771f - 31.3253012050f; // 158.80..192.00 and above
-	} else {
-	    // work on magnitude, then restore sign (still only 'current')
-	    current = -current;
-	    if (current <= 152.0f)        current = current * 1.0526315789f + 0.0f;            // 0..152  (0→0, 152→160)
-	    else if (current <= 27.36f)   current = current * 0.81765353f + 4.29566611f;
-	    else if (current <= 11.30f)   current = current * 1.17994100f + 0.00000000f;  // 0..11.3 → 0..13.333
-	    else if (current <= 6.82f)    current = current * 1.44812673f + 0.0f;
-	    else                          current = current * 1.0000000000f + 8.0f;            // 152..192+ (152→160, 192→200)
-
-	    current = -current;
-	}
-//	current = current * 0.96517f + 0.67488f;
-
-//
-//	if (current >= 0.0f) {
-//
-//		if (current < 50.0f) {
-//	        // 0..50 A
-//	        current = 0.96154f * current + 3.895f;
-//	    } else if (current < 100.0f) {
-//	        // 50..100 A
-//	        current = 1.00679f * current - 0.936f;
-//	    } else if (current < 150.0f) {
-//	        // 100..150 A
-//	        current = 0.98765f * current + 7.345f;
-//	    } else {
-//	        // 150..200+ A
-//	        current = 1.12994f * current - 16.60f;
-//	    }
-//	} else {
-//		if (current > -50.0f) {
-//		    // ~0..50 A (e.g., -3.7mV≈10 A, -7.5mV≈20 A, -15mV≈40 A)
-//		    current = 0.93514f * current + 4.655f;
-//		}
-//		else if (current > -100.0f) {
-//		    // 50..100 A (anchor around measured ~62.6 -> 80 target, continuous at 50 A)
-//		    current = 3.00782f * current + 108.289f;
-//		}
-//		else if (current > -150.0f) {
-//		    // 100..150 A (e.g., ~93.5 -> 120 target)
-//		    current = 0.79450f * current + 1.036f;
-//		}
-//		else {
-//		    // ≥150 A (e.g., ~123.2 -> 160, ~157 -> 200)
-//		    current = 0.98343f * current - 12.201f;
-//		}
-//
-//	}
-	// Optional: small zero band after calibration (helps flicker & rounding)
-//	const float ZERO_BAND_A = 0.05f; // 50 mA
-//	if (current > -ZERO_BAND_A && current < ZERO_BAND_A) {
-//	    current = 0.0f;
-//	}
-
-	// --- LED polarity indication *after* calibration ---
-	// Negative current -> LED ON; Positive/Zero -> LED OFF
 
 
 
@@ -371,10 +310,16 @@ void CurrentValue() {
 
 	float abs_curr = fabsf(display_current);
 
-	if (abs_curr < 5.0)
+	if (abs_curr < 2.0)
+	{
+		//abs_curr = 0.0f;
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+	}
+
+	if (abs_curr < 0.8)
 	{
 		abs_curr = 0.0f;
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+//		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
 	}
 
 	// === Clear digits & DP flags ===
@@ -429,7 +374,7 @@ void VoltageValue() {
 
 	average_V = sum_V / SAMPLES;
 
-	corrected_V = (average_V > OFFSET_ADC_Volt) ? (average_V - OFFSET_ADC_Volt) : 0;
+	corrected_V = (average_V > 0) ? (average_V - 0) : 0;
 
 	adc_vrefint = AD_RES_BUFFER[2]; //fixed bandgap reference inside the chip
 
@@ -439,29 +384,32 @@ void VoltageValue() {
 
 	voltage = (corrected_V * vdda_mV) / 4095;
 
-	float conversion_rate = 9.30f;   // was 9.76 → slightly smaller to keep high-end aligned
-	float gain_correction = 1.0107f;  // near-unity; keep slope stable
-	float offset_correction = -0.046f; // was 2.40 → pull offset down by ~1.0 V
 
 
-	voltage = (voltage / conversion_rate) * gain_correction + offset_correction;
+	float conversion_rate = 0.05367f;
+//	float conversion_rate = 0.0864378565f;   // was 9.76 → slightly smaller to keep high-end aligned
+//	float gain_correction = 1.0107f;  // near-unity; keep slope stable
+//	float offset_correction = -0.046f; // was 2.40 → pull offset down by ~1.0 V
+
+
+	voltage = ((voltage * conversion_rate) * 2 );
 
 	/* --- Exponential Moving Average Filter --- */
 	static float ema_voltage = 0.0f;
-	const float EMA_ALPHA = 0.01f;      // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+	const float EMA_ALPHA = 0.05f;      // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
 
 	ema_voltage = ema_voltage + EMA_ALPHA * (voltage - ema_voltage);
 
 	/* --- Stable display logic with hysteresis --- */
 	static float last_display_voltage = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.8f;  // tighter update band (50 mV)
+	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
 
 	if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD) {
 	    last_display_voltage = ema_voltage;
 	}
 
 
-	float display_voltage = last_display_voltage;
+	 display_voltage = last_display_voltage;
 
 	// After computing display_voltage
 	if (fabsf(display_voltage) <= 0.3f)   // anything below 50 mV = 0.00
@@ -537,7 +485,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-   HAL_Init();
+
+	HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -839,7 +788,8 @@ int main(void)
 					if (editMode)
 
 					{
-						if (mode == 0 || mode == 1) {
+						if (mode == 0 || mode == 1)
+						{
 
 							settingDigits[currentDigitIndex]++;
 							if (settingDigits[currentDigitIndex] > 9)
@@ -910,6 +860,7 @@ int main(void)
 
 					if (mode == 0 || mode == 1) {
 						if (!editMode) {
+							digits[10] = 1;
 							editMode = 1;
 							currentDigitIndex = 0;
 							blinkTimer = HAL_GetTick();
@@ -1010,6 +961,7 @@ int main(void)
 								modeSettings[mode][i] = settingDigits[i];
 
 							mode = 0;
+							digits[10] = 1;
 							for (int i = 0; i < 4; i++)
 								settingDigits[i] = modeSettings[mode][i];
 						}
