@@ -47,11 +47,17 @@
 #define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
 #define VREFINT_CAL_VREF   3000UL   // mV
 
+// ---- Flash geometry (G0): 2 KB pages ----
+#define FLASH_PAGE_SIZE          2048U
+#define FLASH_BASE_ADDR          0x08000000UL
+#define FLASH_SIZE_KB            64U            // <--- set for your device
+#define FLASH_END_ADDR           (FLASH_BASE_ADDR + FLASH_SIZE_KB*1024U)
 
-#define FLASH_USER_PAGE_ADDR   0x0800F800  // Last page
-#define FLASH_USER_PAGE_SIZE   2048
-#define ENTRY_SIZE             8           // 64-bit writes
-#define MAX_ENTRIES            (FLASH_USER_PAGE_SIZE / ENTRY_SIZE)
+#define FLASH_USER_PAGE_ADDR     (FLASH_END_ADDR - FLASH_PAGE_SIZE)
+#define FLASH_USER_PAGE_INDEX    ((FLASH_USER_PAGE_ADDR - FLASH_BASE_ADDR)/FLASH_PAGE_SIZE)
+
+
+
 
 //extern uint8_t modeSettings[5][4];  // Your array
 
@@ -179,12 +185,12 @@ int saveToggle = 0; // 0 = EVEn, 1 = odd
 int programming = 0;
 
 typedef struct {
-	uint32_t shuntValue;
-	uint8_t modeSettings[5][4];
-	uint32_t crc;   // optional: for data integrity
+    uint32_t shuntValue;
+    uint8_t  modeSettings[5][4];
+    uint32_t crc;
 } MeterSettings;
 
-MeterSettings settings;
+static MeterSettings settings __attribute__((aligned(8)));
 
 /* USER CODE END PV */
 
@@ -196,47 +202,54 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-void SaveShuntValueToFlash(MeterSettings *settings) {
-	HAL_FLASH_Unlock();
+void SaveShuntValueToFlash(MeterSettings *s)
+{
+    HAL_FLASH_Unlock();
 
-	// Erase last page
-	FLASH_EraseInitTypeDef eraseInitStruct;
-	uint32_t PageError = 0;
-	eraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
-	eraseInitStruct.Page = 31;
-	eraseInitStruct.NbPages = 1;
-	HAL_FLASHEx_Erase(&eraseInitStruct, &PageError);
+    FLASH_EraseInitTypeDef erase = {0};
+    uint32_t page_error = 0;
+    erase.TypeErase = FLASH_TYPEERASE_PAGES;
+    erase.Banks     = FLASH_BANK_1;
+    erase.Page      = FLASH_USER_PAGE_INDEX;
+    erase.NbPages   = 1;
 
-	// Write struct to flash
-	uint64_t *src = (uint64_t*) settings;
-	uint32_t flashAddr = FLASH_USER_PAGE_ADDR;
-	for (uint32_t i = 0; i < sizeof(MeterSettings); i += 8) {
-		HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, flashAddr, *src++);
-		flashAddr += 8;
-	}
+    HAL_FLASHEx_Erase(&erase, &page_error);
 
-	HAL_FLASH_Lock();
+    // Program the struct as 64-bit chunks
+    uint32_t addr = FLASH_USER_PAGE_ADDR;
+    const uint64_t *p = (const uint64_t *)s;
+    for (size_t i = 0; i < (sizeof(MeterSettings)+7)/8; i++) {
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, p[i]);
+        addr += 8;
+    }
+
+    HAL_FLASH_Lock();
 }
 
-//--------------------------------------------------
-// Load modeSettings[5][4] from Flash
-//--------------------------------------------------
-uint32_t LoadShuntValueFromFlash(MeterSettings *settings) {
-	uint8_t *src = (uint8_t*) FLASH_USER_PAGE_ADDR;
-	memcpy(settings, src, sizeof(MeterSettings));
+void LoadShuntValueFromFlash(MeterSettings *s)
+{
+    const uint64_t *p = (const uint64_t *)FLASH_USER_PAGE_ADDR;
 
-	// If flash is empty, apply defaults
-	if (*(uint64_t*) FLASH_USER_PAGE_ADDR == 0xFFFFFFFFFFFFFFFFULL) {
-		settings->shuntValue = 2000;  // default
-		uint8_t modeSettings[5][4] = { { 2, 0, 0, 0 },    // Default SHnt
-				{ 0, 1, 0, 37 },   // Default du1d
-				{ 9, 6, 0, 0 },    // Default bUAd
-				{ 14, 30, 14, 23 },    // Default EVEn
-				{ 34, 14, 5, 37 }  // Default SAVE
-		};
-		memcpy(settings->modeSettings, modeSettings, sizeof(modeSettings));
-	}
+    // If page is blank (all 0xFF), fall back to defaults
+    if (p[0] == 0xFFFFFFFFFFFFFFFFULL) {
+        // defaults
+        s->shuntValue = 2000;   // set what you actually use
+        uint8_t defaults[5][4] = {
+            {2,0,0,0},      // SHnt
+            {0,1,0,37},     // du1d
+            {9,6,0,0},      // bUAd
+            {14,30,14,23},  // PArt
+            {34,14,5,37}    // SAVE
+        };
+        memcpy(s->modeSettings, defaults, sizeof(defaults));
+        s->crc = 0;
+        return;
+    }
+
+    memcpy(s, (const void*)FLASH_USER_PAGE_ADDR, sizeof(MeterSettings));
+    // (Optional) verify s->crc here
 }
+
 
 void CurrentValue() {
 
@@ -511,6 +524,11 @@ int main(void)
 	}
 
 	status = HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
+
+	LoadShuntValueFromFlash(&settings);
+
+	// Push persisted values into your working arrays/vars
+	memcpy(modeSettings, settings.modeSettings, sizeof(modeSettings));
 
 	digits[8] = 1;
 	digits[12] = 1;
@@ -925,7 +943,11 @@ int main(void)
 										digits[i] = 0;
 									HAL_Delay(300);
 
-									//SaveShuntValueToFlash(&settings);  //SAVE FLASH VALUES
+									memcpy(settings.modeSettings[0], modeSettings[0], 4);   // SHnt
+									memcpy(settings.modeSettings[1], modeSettings[1], 4);   // du1d
+
+
+									SaveShuntValueToFlash(&settings);  //SAVE FLASH VALUES
 
 									break;
 								}
