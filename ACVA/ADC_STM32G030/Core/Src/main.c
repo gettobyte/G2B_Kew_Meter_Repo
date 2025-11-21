@@ -58,12 +58,11 @@ uint16_t digits[9];
 
 #define ADC_HISTORY_LEN 512
 
-#define BUTTON1_Pin GPIO_PIN_6
-#define BUTTON1_GPIO_Port GPIOA
-
-#define BUTTON2_Pin GPIO_PIN_7
+#define BUTTON2_Pin GPIO_PIN_6
 #define BUTTON2_GPIO_Port GPIOA
 
+#define BUTTON1_Pin GPIO_PIN_7
+#define BUTTON1_GPIO_Port GPIOA
 
 static uint16_t counter = 0;
 
@@ -71,8 +70,7 @@ static uint16_t counter = 0;
 #define ADC_NUM_CHANNELS         3U
 #define ADC_DMA_COUNT            (SAMPLES_PER_CYCLE * ADC_NUM_CHANNELS)   // 1024 halfwords
 
-
-uint8_t flag=0;
+uint8_t flag = 0;
 static uint16_t adc_buffer[ADC_DMA_COUNT];
 //static uint16_t adc_buffer[3];
 volatile uint8_t buffer_ready = 0;
@@ -97,7 +95,6 @@ float Irms_AC = 0.0f;
 float Vavg = 0.0;
 float Iavg = 0.0;
 
-
 uint32_t buttonPressStartTime = 0;
 uint8_t waitingFor2Sec = 0;
 uint8_t inPasswordMode = 0;
@@ -116,12 +113,21 @@ int programming = 0;
 
 uint8_t readOnlyMode = 0;
 
-
 uint8_t editMode = 0;                 // Are we editing digits?
 
 uint8_t currentDigitIndex = 0;
 
 uint8_t passwordDigits[4] = { 0, 0, 0, 0 };
+
+// Menu states
+uint8_t connState = 0; // 0: show "Conn", 1: show current type, 2: edit type (blink)
+uint8_t connType = 0;    // 0: delt, 1: iph, 2: star
+
+// Save state
+uint8_t saveEdit = 0;   // 0: just showing SAVE, 1: in Y/N selection
+uint8_t saveChoice = 0;   // 0: Y, 1: N
+
+GPIO_PinState b1, b2;
 
 //static uint16_t adc_buffer[ADC_DMA_COUNT];
 
@@ -129,11 +135,10 @@ uint8_t passwordDigits[4] = { 0, 0, 0, 0 };
 static const float alpha = 0.2f;   // EMA on RMS
 
 /* Debug (watch in Live Expressions if desired) */
-volatile int   dbg_nv = -1, dbg_ni = -1;
+volatile int dbg_nv = -1, dbg_ni = -1;
 volatile float dbg_dt = 0.0f, dbg_phi = 0.0f;
 
 float Power_Factor = 0.0;
-
 
 static float Vrms_filtered = 0;
 static float Irms_filtered = 0;
@@ -144,12 +149,23 @@ float threshold_i = 0.5f;
 const float alpha_v = 0.1f;  // slower, steadier EMA
 float threshold_v = 0.5f;
 
+#define CT_PR_DECIMAL_POS 1
+#define CT_SE_DECIMAL_POS 1
 
+float ct_pr_value = 1.0f;
+float ct_se_value = 1.0f;
+
+uint8_t ct_pr_digits[4] = { 1, 0, 0, 0 };  // 1.000
+uint8_t ct_se_digits[4] = { 1, 0, 0, 0 };  // 1.000
+uint8_t ct_pr_decimal_pos = CT_PR_DECIMAL_POS;
+uint8_t ct_se_decimal_pos = CT_SE_DECIMAL_POS;
+
+uint8_t ct_pr_editing_digit = 0;  // Which digit is being edited (0-3)
+uint8_t ct_se_editing_digit = 0;  // Which digit is being edited (0-3)
 
 float PF_Phase_deg = 0.0f;                // optional displacement angle from PF
 
-
-GPIO_PinState b1,b2;
+GPIO_PinState b1, b2;
 
 HAL_StatusTypeDef status;
 
@@ -179,8 +195,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc) {
 // Called when the entire DMA buffer is filled
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 	process_block(&adc_buffer, ADC_DMA_COUNT);
-	 buffer_ready = 1;
-
+	buffer_ready = 1;
 
 }
 
@@ -204,130 +219,116 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 //	}
 //}
 
-static void process_block(uint16_t *blk, size_t count_halfwords)
-{
-    uint32_t vref_acc = 0;
-    uint16_t vref_samples = 0;
+static void process_block(uint16_t *blk, size_t count_halfwords) {
+	uint32_t vref_acc = 0;
+	uint16_t vref_samples = 0;
 
-    // stride of 3: [V, I, VREFINT]
-    for (size_t k = 0; k < count_halfwords; k += 3U) {
+	// stride of 3: [V, I, VREFINT]
+	for (size_t k = 0; k < count_halfwords; k += 3U) {
 
-        uint16_t raw_v    = blk[k + 0];
-        uint16_t raw_i    = blk[k + 1];
-        uint16_t raw_vref = blk[k + 2];
+		uint16_t raw_v = blk[k + 0];
+		uint16_t raw_i = blk[k + 1];
+		uint16_t raw_vref = blk[k + 2];
 
-        // accumulate VREFINT samples for this block
-        vref_acc     += raw_vref;
-        vref_samples++;
+		// accumulate VREFINT samples for this block
+		vref_acc += raw_vref;
+		vref_samples++;
 
-        // use *previous* vdda_mV to scale V and I into mV for RMS math
-        v_buf[buf_index] = (raw_v * vdda_mV) / 4095U;
-        i_buf[buf_index] = (raw_i * vdda_mV) / 4095U;
+		// use *previous* vdda_mV to scale V and I into mV for RMS math
+		v_buf[buf_index] = (raw_v * vdda_mV) / 4095U;
+		i_buf[buf_index] = (raw_i * vdda_mV) / 4095U;
 
-        buf_index++;
-        if (buf_index >= ADC_HISTORY_LEN) {
-            buf_index = 0;
-        }
-    }
+		buf_index++;
+		if (buf_index >= ADC_HISTORY_LEN) {
+			buf_index = 0;
+		}
+	}
 
-    // update VDDA estimate from average VREFINT of this block
-    if (vref_samples > 0) {
-        uint16_t vref_raw = (uint16_t)(vref_acc / vref_samples);
-        uint16_t vref_cal = *VREFINT_CAL_ADDR;
+	// update VDDA estimate from average VREFINT of this block
+	if (vref_samples > 0) {
+		uint16_t vref_raw = (uint16_t) (vref_acc / vref_samples);
+		uint16_t vref_cal = *VREFINT_CAL_ADDR;
 
-        // VDDA = VREFINT_CAL_VREF * VREFINT_CAL / vref_raw
-        vdda_mV = (uint32_t)VREFINT_CAL_VREF * (uint32_t)vref_cal / (uint32_t)vref_raw;
-    }
+		// VDDA = VREFINT_CAL_VREF * VREFINT_CAL / vref_raw
+		vdda_mV = (uint32_t) VREFINT_CAL_VREF * (uint32_t) vref_cal
+				/ (uint32_t) vref_raw;
+	}
 
-    // signal to main() that a fresh block is ready for RMS
+	// signal to main() that a fresh block is ready for RMS
 
 }
 
-
 void Calculate_Vrms() {
 
+	float sum = 0.0f;
+	float sum_sq = 0.0f;
 
-		float sum = 0.0f;
-		float sum_sq = 0.0f;
+	// Step 1: Compute mean (DC offset) in volts
+	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
 
-		// Step 1: Compute mean (DC offset) in volts
-		for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+		sum += v_buf[i];
+	}
 
-			sum += v_buf[i];
-		}
+	Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
 
+	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
 
+		sum_sq += (v_buf[i] - Vavg) * (v_buf[i] - Vavg); // accumulate squared values
+	}
 
-		Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
+	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
 
+	// Step 2: Compute RMS values
 
-		for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+	Vrms_total = sqrtf(mean_sq);
 
-			sum_sq += ( v_buf[i] - Vavg) * ( v_buf[i] - Vavg); // accumulate squared values
-		}
-
-		float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
-
-		// Step 2: Compute RMS values
-
-		Vrms_total = sqrtf(mean_sq);
-
-		const float K_VRMS = 0.2512f;
-		Vrms_total *= K_VRMS;
+	const float K_VRMS = 0.2512f;
+	Vrms_total *= K_VRMS;
 
 //		Vrms_total = Vrms_total * 1.03;
 
-		if (fabsf(Vrms_total - Vrms_AC) >= threshold_v) {
-			Vrms_AC = Vrms_total;
-		}
+	if (fabsf(Vrms_total - Vrms_AC) >= threshold_v) {
+		Vrms_AC = Vrms_total;
+	}
 
-		Vrms_filtered = (alpha_v * Vrms_AC)
-				+ ((1.0f - alpha_v) * Vrms_filtered);
-
-
+	Vrms_filtered = (alpha_v * Vrms_AC) + ((1.0f - alpha_v) * Vrms_filtered);
 
 }
 
 void Calculate_Irms() {
 
+	float sum = 0.0f;
+	float sum_sq = 0.0f;
 
-		float sum = 0.0f;
-		float sum_sq = 0.0f;
+	// Step 1: Compute mean (DC offset) in volts
+	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
 
-		// Step 1: Compute mean (DC offset) in volts
-		for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+		sum += i_buf[i];
+	}
 
-			sum += i_buf[i];
-		}
+	Iavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
 
-		Iavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
+	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
 
-		for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+		sum_sq += (i_buf[i] - Iavg) * (i_buf[i] - Iavg); // accumulate squared values
+	}
 
-			sum_sq += (i_buf[i] - Iavg) * (i_buf[i] - Iavg); // accumulate squared values
-		}
+	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
 
-		float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
+	// Step 2: Compute RMS values
 
-		// Step 2: Compute RMS values
+	Irms_total = sqrtf(mean_sq);
 
-		Irms_total = sqrtf(mean_sq);
+	const float K_IRMS = 4.56f;   // or 4.6f as a nice round value
+	Irms_total *= K_IRMS;
 
-		const float K_IRMS = 4.56f;   // or 4.6f as a nice round value
-		Irms_total *= K_IRMS;
+	if (fabsf(Irms_total - Irms_AC) >= threshold_i) {
+		Irms_AC = Irms_total;
+	}
 
-		if (fabsf(Irms_total - Irms_AC) >= threshold_i) {
-			Irms_AC = Irms_total;
-		}
-
-		Irms_filtered = (alpha_i * Irms_AC)
-				+ ((1.0f - alpha_i) * Irms_filtered);
-
-
+	Irms_filtered = (alpha_i * Irms_AC) + ((1.0f - alpha_i) * Irms_filtered);
 
 }
-
-
 
 static void Compute_PF_FromBuffers(void) {
 	const uint16_t N = ADC_HISTORY_LEN;      // your 512
@@ -402,73 +403,42 @@ static void Compute_PF_FromBuffers(void) {
 	Power_Factor = out;
 }
 
-
-
-//static void Display_Update_FromValue(uint16_t value)
-//{
-//    if (value > 9999) value = 9999;  // safety
-//
-//    // 1) Extract digits (LSB = digit 0)
-//    uint8_t d0 = value % 10;
-//    uint8_t d1 = (value / 10) % 10;
-//    uint8_t d2 = (value / 100) % 10;
-//    uint8_t d3 = (value / 1000) % 10;
-//
-//    // 2) Decide how many digits are really used (1..4)
-//    uint8_t used;
-//    if (value < 10)         used = 10;
-//    else if (value < 100)   used = 11;
-//    else if (value < 1000)  used = 12;
-//    else                    used = 13;
-//
-//    // 3) Map to your Segment_Patterns indices
-//    //    (0..9 = numbers, 37 = 'space' in your table)
-//    digits[0] = d3;                // least significant digit always visible
-//    digits[1] = (used >= 2) ? d2 : 37;  // space if not used
-//    digits[2] = (used >= 3) ? d1 : 37;
-//    digits[3] = (used >= 4) ? d0 : 37;
-//
-//    // 4) Set LED level for "digit 8"
-//    //    1 digit → 1 LED, 2 digits → 2 LEDs, etc.
-////    digits[8] = used;      // 1..4
-//}
-
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
-  /* USER CODE BEGIN 1 */
+	/* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 
-  /* USER CODE BEGIN Init */
+	HAL_Init();
 
-  /* USER CODE END Init */
+	/* USER CODE BEGIN Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* USER CODE END Init */
 
-  /* USER CODE BEGIN SysInit */
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE END SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_ADC1_Init();
-  MX_TIM3_Init();
-  MX_TIM1_Init();
-  /* USER CODE BEGIN 2 */
+	/* USER CODE END SysInit */
+
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_DMA_Init();
+	MX_ADC1_Init();
+	MX_TIM3_Init();
+	MX_TIM1_Init();
+	/* USER CODE BEGIN 2 */
 	if (HAL_ADCEx_Calibration_Start(&hadc1) != HAL_OK) {
 		Error_Handler();
 	}
@@ -477,821 +447,661 @@ int main(void)
 
 	HAL_TIM_Base_Start(&htim1);
 
-	status =	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_buffer, ADC_DMA_COUNT);
+	status = HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_buffer, ADC_DMA_COUNT);
 
-			digits[0] = 0;
-			digits[1] = 0;
-			digits[2] = 0;
-			digits[3] = 0;
-			digits[4] = 1;
+	digits[0] = 0;
+	digits[1] = 0;
+	digits[2] = 0;
+	digits[3] = 0;
+	digits[4] = 1;
 
+	/* USER CODE END 2 */
 
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
 	while (1) {
-    /* USER CODE END WHILE */
+		/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+		/* USER CODE BEGIN 3 */
 
-
-		GPIO_PinState b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
-		GPIO_PinState b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+		b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+		b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
 // =============== Step 1: Long-press BOTH BUTTONS to enter password mode =============== //
 
 		if (!inPasswordMode) {
- 					if (b1 == GPIO_PIN_RESET && b2 == GPIO_PIN_RESET) {
+			if (b1 == GPIO_PIN_RESET && b2 == GPIO_PIN_RESET) {
 
-						if (waitingFor2Sec == 0) {
-							buttonPressStartTime = HAL_GetTick();
-							waitingFor2Sec = 1;
-						} else if (HAL_GetTick() - buttonPressStartTime >= 2000) {
+				if (waitingFor2Sec == 0) {
+					buttonPressStartTime = HAL_GetTick();
+					waitingFor2Sec = 1;
+				} else if (HAL_GetTick() - buttonPressStartTime >= 2000) {
 
+					inPasswordMode = 1;
+					entryComplete = 0;
+					waitingFor2Sec = 0;
+					currentDigitIndex = 0;
 
+					for (int i = 0; i < 4; i++) {
 
-							inPasswordMode = 1;
-							entryComplete = 0;
-							waitingFor2Sec = 0;
-							currentDigitIndex = 0;
+						digits[i] = 0;
+						passwordEntered[i] = 0;
+					}
 
-							for (int i = 0; i < 4; i++) {
-
-								digits[i] = 0;
-								passwordEntered[i] = 0;
-							}
-
-						}
-					} else {
-						waitingFor2Sec = 0;
-					    if (buffer_ready) {
-							        buffer_ready = 0;
-							        Calculate_Vrms();
-							        Calculate_Irms();
-							       // Compute_PF_FromBuffers();
-							    }
-					   }
 				}
-
+			} else {
+				waitingFor2Sec = 0;
+				if (buffer_ready) {
+					buffer_ready = 0;
+					Calculate_Vrms();
+					Calculate_Irms();
+//							        Compute_PF_FromBuffers();
+				}
+			}
+		}
 
 // ============================== Step 2: Enter password mode ============================== //
 
-				else if (!modeEntryActive) {
+		else if (!modeEntryActive) {
 
-					// Blinking selected digit
-					if (!entryComplete && HAL_GetTick() - blinkTimer >= 300) {
-						digits[4] = 0;
-						blinkTimer = HAL_GetTick();
-						blinkState = !blinkState;
-						digits[currentDigitIndex] =
-								blinkState ? 37 : passwordEntered[currentDigitIndex]; // 37 = blank
-					}
+			// Blinking selected digit
+			if (!entryComplete && HAL_GetTick() - blinkTimer >= 300) {
+				digits[4] = 0;
+				blinkTimer = HAL_GetTick();
+				blinkState = !blinkState;
+				digits[currentDigitIndex] =
+						blinkState ? 37 : passwordEntered[currentDigitIndex]; // 37 = blank
+			}
 
-					if (!entryComplete && HAL_GetTick() - lastPress > 300) {
+			if (!entryComplete && HAL_GetTick() - lastPress > 300) {
 
-						if (b1 == GPIO_PIN_RESET) {
-							passwordEntered[currentDigitIndex]++;
-							if (passwordEntered[currentDigitIndex] > 9)
-								passwordEntered[currentDigitIndex] = 0;
-							digits[currentDigitIndex] =
-									passwordEntered[currentDigitIndex];
-							lastPress = HAL_GetTick();
-						} else if (b2 == GPIO_PIN_RESET) {
-							digits[currentDigitIndex] = 36;
-							currentDigitIndex++;
-							if (currentDigitIndex >= 4) {
-								entryComplete = 1;
+				if (b2 == GPIO_PIN_RESET) {
+					passwordEntered[currentDigitIndex]++;
+					if (passwordEntered[currentDigitIndex] > 9)
+						passwordEntered[currentDigitIndex] = 0;
+					digits[currentDigitIndex] =
+							passwordEntered[currentDigitIndex];
+					lastPress = HAL_GetTick();
+				} else if (b1 == GPIO_PIN_RESET) {
+					digits[currentDigitIndex] = 36;
+					currentDigitIndex++;
+					if (currentDigitIndex >= 4) {
+						entryComplete = 1;
 
-								// Compare password
-								passwordMatched = 1;
-								for (int i = 0; i < 4; i++) {
-									if (passwordEntered[i] != correctPassword[i]) {
-										passwordMatched = 0;
-										break;
-									}
-
-									if (passwordEntered[i] == correctPassword[i]) {
-										programming = 1;
-										modeEntryActive = 1;
-									}
-								}
-
-								digits[0] = 14; // E
-								digits[1] = 23; // n
-								digits[2] = 36; // -
-								digits[3] = passwordMatched ? 34 : 23; // y : n
-
-
-
-
-								while (1) {
-									GPIO_PinState b1 = HAL_GPIO_ReadPin(
-											BUTTON1_GPIO_Port, BUTTON1_Pin);
-									if (b1 == GPIO_PIN_RESET) {
-										break;
-									}
-								}
-
-
-								if (!passwordMatched) {
-									readOnlyMode = 1;
-									mode = 0;
-									currentDigitIndex = 0;
-									blinkState = 0;
-									blinkTimer = HAL_GetTick();
-
-//									const uint8_t defaultShnt[4] = { modeSettings[0][0],
-//											modeSettings[0][1], modeSettings[0][2],
-//											modeSettings[0][3] };
-//									const uint8_t defaultDuid[4] = { modeSettings[1][0],
-//											modeSettings[1][1], modeSettings[1][2], 37 };
-//
-//									int localMode = 0; // Tracks what to show: 0 → SHnt, 1 → du1d, 2 → reset
-//
-//									while (1) {
-//										// Show SHnt
-//
-//										if (localMode == 0) {
-//											digits[10] = 1;
-//											for (int j = 0; j < 4; j++) {
-//												digits[j] = defaultShnt[j];
-//												digits[4 + j] = modeLabels[0][j];
-//											}
-//										}
-//										// Show du1d
-//										while (1) {
-//
-//											GPIO_PinState b1 = HAL_GPIO_ReadPin(
-//													BUTTON1_GPIO_Port, BUTTON1_Pin);
-//											if (b1 == GPIO_PIN_RESET) {
-//
-//												break;
-//											}
-//										}
-//										if (localMode == 1) {
-//											digits[10] = 0;
-//											for (int j = 0; j < 4; j++) {
-//												digits[j] = defaultDuid[j];
-//												digits[4 + j] = modeLabels[1][j];
-//											}
-//
-//										}
-//
-//										// Reset system after du1d
-//										else if (localMode == 2) {
-//											// === Reset system ===
-//											memcpy(settingDigits, defaultShnt, 4); // SHnt
-//											memcpy(settingDigits,
-//													baudModes[baudModeIndex], 4); // bUAd
-//
-//											// Fully reset all state flags
-//											inPasswordMode = 0;
-//											modeEntryActive = 0;
-//											entryComplete = 0;
-//											waitingFor2Sec = 0;
-//											currentDigitIndex = 0;
-//											readOnlyMode = 0;
-//											programming = 0;
-//											editMode = 0;
-//											blinkState = 0;
-//											digits[8] = 1;
-//											digits[12] = 1;
-//
-//											// Clear screen
-//											for (int i = 0; i < 8; i++)
-//												digits[i] = 0;
-//
-//											HAL_Delay(300);
-//
-//											// === Add this: exit wrong password loop ===
-//											break;
-//										}
-//
-//										// Handle button 1 to cycle modes
-//										if (HAL_GPIO_ReadPin(BUTTON1_GPIO_Port,
-//												BUTTON1_Pin) == GPIO_PIN_RESET) {
-//											HAL_Delay(300); // debounce
-//											localMode++;
-//											if (localMode > 2)
-//												localMode = 2;
-//										}
-//									}
-//									inPasswordMode = 0;
-//									programming = 0;
-//									modeEntryActive = 0;
-
-								}
-
-								// if matched, go to config mode
-
-								currentDigitIndex = 0;
-								mode = 0;
-								for (int i = 0; i < 4; i++)
-									settingDigits[i] = 0;
-
+						// Compare password
+						passwordMatched = 1;
+						for (int i = 0; i < 4; i++) {
+							if (passwordEntered[i] != correctPassword[i]) {
+								passwordMatched = 0;
+								break;
 							}
-							lastPress = HAL_GetTick();
 
+							if (passwordEntered[i] == correctPassword[i]) {
+
+								modeEntryActive = 1;
+							}
+						}
+
+						digits[0] = 14; // E
+						digits[1] = 23; // n
+						digits[2] = 36; // -
+						digits[3] = passwordMatched ? 34 : 23; // y : n
+
+						while (1) {
+							GPIO_PinState b2 = HAL_GPIO_ReadPin(
+							BUTTON2_GPIO_Port, BUTTON2_Pin);
+							if (b2 == GPIO_PIN_RESET) {
+								programming = 1;
+								break;
+							}
+						}
+
+						if (!passwordMatched) {
+							readOnlyMode = 1;
+							mode = 0;
+							currentDigitIndex = 0;
+							blinkState = 0;
+							blinkTimer = HAL_GetTick();
+
+						}
+
+						// if matched, go to config mode
+
+						currentDigitIndex = 0;
+						mode = 0;
+						for (int i = 0; i < 4; i++)
+							settingDigits[i] = 0;
+
+					}
+					lastPress = HAL_GetTick();
+
+				}
+			}
+		}
+// =============== Step 3: Simple configuration MENU after correct password ================== //
+		else if (programming == 1) {
+			// Common debounce
+			uint32_t now = HAL_GetTick();
+
+			// ------------------- 1) Display logic (what to show on digits) ------------------- //
+
+			switch (mode) {
+			case 0: // Conn menu
+				if (connState == 0) {
+					// Show "Conn"
+					// C  o  n  n
+					digits[0] = 12;   // C
+					digits[1] = 24;   // o (lower o)
+					digits[2] = 23;   // n
+					digits[3] = 23;   // n
+				} else {
+					// connState == 1 (show current type) OR 2 (edit/blink current type)
+					if (connState == 2) {
+						// Blink current type
+						if (now - blinkTimer >= 300) {
+							blinkTimer = now;
+							blinkState = !blinkState;
+						}
+
+						if (blinkState) {
+							// show blank when OFF
+							digits[0] = 37;
+							digits[1] = 37;
+							digits[2] = 37;
+							digits[3] = 37;
+						} else {
+							// show type text when ON
+							goto SHOW_CONN_TYPE;
+						}
+					} else {
+						SHOW_CONN_TYPE:
+						// Show current type without blinking
+						if (connType == 0) {
+							// "delt"
+							digits[0] = 13;  // d
+							digits[1] = 14;  // e
+							digits[2] = 21;  // L (for l)
+							digits[3] = 29;  // t
+						} else if (connType == 1) {
+							// "iph"
+							digits[0] = 18;  // I
+							digits[1] = 25;  // P
+							digits[2] = 17;  // H
+							digits[3] = 37;  // blank
+						} else // connType == 2
+						{
+							// "star"
+							digits[0] = 28;  // S
+							digits[1] = 29;  // T
+							digits[2] = 10;  // A
+							digits[3] = 27;  // R
 						}
 					}
 				}
-		// ===============Step 3: Configuration mode (if password matched)========= //
-//				else if (programming == 1) {
-//					// === INIT DEFAULT VALUES ON FIRST ENTRY ONLY ===
-//					static uint8_t initialized = 0;
-//					if (!initialized) {
-//						const uint8_t defaultShnt[4] = { modeSettings[0][0],
-//								modeSettings[0][1], modeSettings[0][2],
-//								modeSettings[0][3] };
-//						const uint8_t defaultDuid[3] = { modeSettings[1][0],
-//								modeSettings[1][1], modeSettings[1][2] };
-//
-//						memcpy(modeSettings[0], defaultShnt, 4);           // SHnt
-//						memcpy(modeSettings[1], defaultDuid, 3);            // du1d
-//						memcpy(modeSettings[2], baudModes[baudModeIndex], 4); // bUAd
-//						memcpy(modeSettings[3], partModes[partModeIndex], 4); // PArt
-//						memcpy(modeSettings[4], saveModes[saveToggle], 4);    // SAVE
-//
-//						memcpy(settingDigits, modeSettings[0], 4); // Load SHnt initially
-//						initialized = 1;
-//
-//						digits[10] = 1;
-//					}
-//
-//					// === MODE LABEL DISPLAY (digits 4–7) ===
-//					for (int i = 0; i < 4; i++)
-//						digits[4 + i] = modeLabels[mode][i];
-//
-//					// === UPPER DIGITS DISPLAY (0–3) ===
-//					if (mode == 4 && editMode)  // SAVE Mode with blinking
-//							{
-//						if (HAL_GetTick() - blinkTimer >= 300) {
-//							blinkTimer = HAL_GetTick();
-//							blinkState = !blinkState;
-//						}
-//
-//						for (int i = 0; i < 4; i++)
-//							digits[i] = blinkState ? 37 : settingDigits[i];
-//					} else if (editMode) {
-//						if (HAL_GetTick() - blinkTimer >= 300) {
-//							blinkTimer = HAL_GetTick();
-//							blinkState = !blinkState;
-//						}
-//
-//						for (int i = 0; i < 4; i++)
-//							digits[i] =
-//									(blinkState && (mode >= 2))
-//											|| (i == currentDigitIndex && blinkState) ?
-//											37 : settingDigits[i];
-//					} else {
-//						for (int i = 0; i < 4; i++)
-//							digits[i] = settingDigits[i];
-//					}
-//
-//					// === BUTTON HANDLING ===
-//					if (HAL_GetTick() - lastPress > 300) {
-//						// ===== BUTTON 1 =====
-//						if (b1 == GPIO_PIN_RESET) {
-//							while (HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin)
-//									== GPIO_PIN_RESET)
-//								;
-//
-//							if (editMode)
-//
-//							{
-//								if (mode == 0 || mode == 1)
-//								{
-//
-//									settingDigits[currentDigitIndex]++;
-//									if (settingDigits[currentDigitIndex] > 9)
-//										settingDigits[currentDigitIndex] = 0;
-//								}
-//
-//								else if (mode == 1)  // duid mode
-//										{
-//									// Only allow editing first 3 digits (0,1,2)
-//									if (currentDigitIndex < 3) {
-//										settingDigits[currentDigitIndex]++;
-//										if (settingDigits[currentDigitIndex] > 9)
-//											settingDigits[currentDigitIndex] = 0;
-//									}
-//								}
-//
-//								else if (mode == 2)  // bUAd
-//										{
-//									baudModeIndex = (baudModeIndex + 1) % 4;
-//									memcpy(settingDigits, baudModes[baudModeIndex], 4);
-//								} else if (mode == 3)  // PArt
-//										{
-//									partModeIndex = (partModeIndex + 1) % 3;
-//									memcpy(settingDigits, partModes[partModeIndex], 4);
-//								} else if (mode == 4)  // SAVE → Toggle YES/NO
-//										{
-//									saveToggle = !saveToggle;
-//									memcpy(settingDigits, saveModes[saveToggle], 4);
-//								}
-//							} else {
-//								// Save settings before switching mode
-//								for (int i = 0; i < 4; i++)
-//									modeSettings[mode][i] = settingDigits[i];
-//
-//								mode = (mode + 1) % 5;
-//								for (int i = 0; i < 4; i++)
-//									settingDigits[i] = modeSettings[mode][i];
-//
-//								if (mode == 0) {
-//
-//									digits[10] = 1;
-//
-//								} else {
-//
-//									digits[10] = 0;
-//
-//								}
-//								// Automatically enter editMode in SAVE mode
-//								if (mode == 4) {
-//									editMode = 1;
-//									blinkTimer = HAL_GetTick();
-//									saveToggle = 1;  // Start at YES
-//									memcpy(settingDigits, saveModes[saveToggle], 4);
-//								} else {
-//									editMode = 0;
-//									currentDigitIndex = 0;
-//								}
-//							}
-//
-//							lastPress = HAL_GetTick();
-//						}
-//
-//						// ===== BUTTON 2 =====
-//						else if (b2 == GPIO_PIN_RESET) {
-//							while (HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin)
-//									== GPIO_PIN_RESET)
-//								;
-//
-//							if (mode == 0 || mode == 1) {
-//								if (!editMode) {
-//									digits[10] = 1;
-//									editMode = 1;
-//									currentDigitIndex = 0;
-//									blinkTimer = HAL_GetTick();
-//								} else {
-//									currentDigitIndex++;
-//									if (mode == 1 && currentDigitIndex >= 3) // stop at digit 2
-//											{
-//										currentDigitIndex = 0;
-//										editMode = 0;
-//										for (int i = 0; i < 3; i++) // only save first 3 digits
-//											modeSettings[mode][i] = settingDigits[i];
-//									} else if (mode != 1 && currentDigitIndex >= 4) {
-//										currentDigitIndex = 0;
-//										editMode = 0;
-//										for (int i = 0; i < 4; i++)
-//											modeSettings[mode][i] = settingDigits[i];
-//									}
-//
-//								}
-//							} else if (mode == 2 || mode == 3) {
-//								editMode = !editMode;
-//								blinkTimer = HAL_GetTick();
-//
-//								if (!editMode) {
-//									for (int i = 0; i < 4; i++)
-//										modeSettings[mode][i] = settingDigits[i];
-//								}
-//							} else if (mode == 4)  // SAVE mode confirmation
-//									{
-//								editMode = 0;  // Stop blinking
-//
-//								for (int i = 0; i < 4; i++)
-//									digits[i] = settingDigits[i];
-//
-//								HAL_Delay(200);
-//
-//								// SAVE = YES
-//								if (settingDigits[0] == saveModes[1][0]
-//										&& settingDigits[1] == saveModes[1][1]
-//										&& settingDigits[2] == saveModes[1][2]
-//										&& settingDigits[3] == saveModes[1][3]) {
-//									while (1) {
-//										GPIO_PinState b1_state = HAL_GPIO_ReadPin(
-//												BUTTON1_GPIO_Port, BUTTON1_Pin);
-//										GPIO_PinState b2_state = HAL_GPIO_ReadPin(
-//												BUTTON2_GPIO_Port, BUTTON2_Pin);
-//
-//										if (b1_state == GPIO_PIN_RESET) {
-//											while (HAL_GPIO_ReadPin(BUTTON1_GPIO_Port,
-//													BUTTON1_Pin) == GPIO_PIN_RESET)
-//												;
-//
-//											programming = 0;
-//											inPasswordMode = 0;
-//											modeEntryActive = 0;
-//											editMode = 0;
-//											currentDigitIndex = 0;
-//											initialized = 0;
-//											digits[8] = 1;
-//											digits[12] = 1;
-//											for (int i = 0; i < 8; i++)
-//												digits[i] = 0;
-//											HAL_Delay(300);
-//
-//											memcpy(settings.modeSettings[0], modeSettings[0], 4);   // SHnt
-//											memcpy(settings.modeSettings[1], modeSettings[1], 4);   // du1d
-//
-//
-//											SaveShuntValueToFlash(&settings);  //SAVE FLASH VALUES
-//
-//											break;
-//										}
-//
-//										else if (b2_state == GPIO_PIN_RESET) {
-//											while (HAL_GPIO_ReadPin(BUTTON2_GPIO_Port,
-//													BUTTON2_Pin) == GPIO_PIN_RESET)
-//												;
-//
-//											editMode = 1;
-//											blinkTimer = HAL_GetTick();
-//											currentDigitIndex = 0;
-//											break;
-//										}
-//
-//										if (editMode) {
-//											if (HAL_GetTick() - blinkTimer >= 300) {
-//												blinkTimer = HAL_GetTick();
-//												blinkState = !blinkState;
-//
-//												for (int i = 0; i < 4; i++)
-//													digits[i] =
-//															blinkState ?
-//																	37 :
-//																	settingDigits[i];
-//											}
-//										}
-//									}
-//								} else {
-//
-//									// SAVE = NO → loop to next mode
-//									for (int i = 0; i < 4; i++)
-//										modeSettings[mode][i] = settingDigits[i];
-//
-//									mode = 0;
-//									digits[10] = 1;
-//									for (int i = 0; i < 4; i++)
-//										settingDigits[i] = modeSettings[mode][i];
-//								}
-//							}
-//
-//							lastPress = HAL_GetTick();
-//						}
-//					}
-//				}
+				break;
 
-		////////////////////////////////////////////////////////////////////////////
+			case 1: // "ct.pr"
+				// c  t  p  r
+				digits[0] = 12;  // C
+				digits[1] = 29;  // T
+				digits[2] = 25;  // P
+				digits[3] = 27;  // R
+				digits[5] = 1;
+
+				if (b1 == GPIO_PIN_RESET) {
+					digits[0] = 1;
+					digits[1] = 0;
+					digits[2] = 0;
+					digits[3] = 0;
+					digits[5] = 0;
+					digits[4] = 1;
+				}
+
+				break;
+
+			case 2: // "ct.se"
+				// c  t  s  e
+				digits[0] = 12;  // C
+				digits[1] = 29;  // T
+				digits[2] = 28;  // S
+				digits[3] = 14;  // E
+				digits[5] = 1;
+				break;
+
+			case 3: // SAVE y/n
+				// Always show "SAV"
+				digits[0] = 28;  // S
+				digits[1] = 10;  // A
+				digits[2] = 30;  // V
+				digits[5] = 0;
+				digits[6] = 1;
+
+				// Blink last digit (y or n)
+				if (now - blinkTimer >= 300) {
+					blinkTimer = now;
+					blinkState = !blinkState;
+				}
+
+				if (blinkState) {
+					digits[3] = 37;  // blank when OFF
+				} else {
+					if (saveChoice == 0) {
+						digits[3] = 34;  // Y  → SAVy
+					} else {
+						digits[3] = 23;  // n  → SAVn
+					}
+				}
+				break;
+			}
+
+			// ------------------- 2) Button handling (B1 / B2) ------------------- //
+
+			if (now - lastPress > 200)   // simple debounce
+					{
+				// BUTTON 1: mainly "enter / edit / confirm"
+				if (b1 == GPIO_PIN_RESET) {
+					lastPress = now;
+
+					if (mode == 0) {
+						// Conn flow:
+						// Conn (0) --B1--> delt/iph/star (1)
+						//        --B1--> edit blink (2)
+						//        --B1--> back to Conn (0)
+						if (connState == 0) {
+							connState = 1;      // show current type
+						} else if (connState == 1) {
+							connState = 2;      // start editing (blink)
+							blinkState = 0;
+							blinkTimer = now;
+						} else // connState == 2
+						{
+							connState = 0;    // finish editing, go back to Conn
+						}
+					} else if (mode == 3) {
+						// In SAVE.y/n:
+						// B1 = CONFIRM current choice
+						if (saveChoice == 0) {
+							// YES → exit menu configuration completely
+							programming = 0;
+							inPasswordMode = 0;
+							modeEntryActive = 0;
+							connState = 0;
+							mode = 0;
+							digits[6] = 0;
+							digits[0] = 0;
+							digits[1] = 0;
+							digits[2] = 0;
+							digits[3] = 0;
+							digits[4] = 1;
+
+							// (optional: clear digits here)
+						} else {
+							// NO → back to start of menu (Conn)
+							mode = 0;
+							connState = 0;
+							digits[6] = 0;
+							// still in programming mode
+						}
+					}
+
+				}
+
+				// BUTTON 2: "next / select / toggle"
+				else if (b2 == GPIO_PIN_RESET) {
+					lastPress = now;
+
+					if (mode == 0) {
+						if (connState == 2) {
+							// While editing, B2 cycles delt / iph / star
+							connType = (connType + 1) % 3;
+						} else if (connState == 0) {
+							// When back to Conn (not editing), B2 moves to next menu item
+							mode = 1;          // go to ct.pr
+						}
+						// If connState == 1 (view type), ignore B2
+					} else if (mode == 1) {
+						// From ct.pr, B2 -> ct.se
+						mode = 2;
+					} else if (mode == 2) {
+						// From ct.se, B2 -> SAVE (start with Y blinking)
+						mode = 3;
+						saveChoice = 0;        // default Y
+						blinkState = 0;
+						blinkTimer = now;
+					} else if (mode == 3) {
+						// In SAVE.y/n, B2 toggles between Y and n
+						saveChoice ^= 1;       // 0 -> 1, 1 -> 0
+					}
+				}
+			}
+		}
 
 	}
-  /* USER CODE END 3 */
+
+	/* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
 
-  /** Configure the main internal regulator output voltage
-  */
-  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+	/** Configure the main internal regulator output voltage
+	 */
+	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
-  RCC_OscInitStruct.PLL.PLLN = 8;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
-  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+	RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+	RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
+	RCC_OscInitStruct.PLL.PLLN = 8;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+	RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+	/** Initializes the CPU, AHB and APB buses clocks
+	 */
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+		Error_Handler();
+	}
 }
 
 /**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
+ * @brief ADC1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_ADC1_Init(void) {
 
-  /* USER CODE BEGIN ADC1_Init 0 */
+	/* USER CODE BEGIN ADC1_Init 0 */
 
-  /* USER CODE END ADC1_Init 0 */
+	/* USER CODE END ADC1_Init 0 */
 
-  ADC_ChannelConfTypeDef sConfig = {0};
+	ADC_ChannelConfTypeDef sConfig = { 0 };
 
-  /* USER CODE BEGIN ADC1_Init 1 */
+	/* USER CODE BEGIN ADC1_Init 1 */
 
-  /* USER CODE END ADC1_Init 1 */
+	/* USER CODE END ADC1_Init 1 */
 
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc1.Init.LowPowerAutoWait = DISABLE;
-  hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 3;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO2;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc1.Init.DMAContinuousRequests = ENABLE;
-  hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
-  hadc1.Init.OversamplingMode = DISABLE;
-  hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+	 */
+	hadc1.Instance = ADC1;
+	hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+	hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+	hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+	hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+	hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+	hadc1.Init.LowPowerAutoWait = DISABLE;
+	hadc1.Init.LowPowerAutoPowerOff = DISABLE;
+	hadc1.Init.ContinuousConvMode = DISABLE;
+	hadc1.Init.NbrOfConversion = 3;
+	hadc1.Init.DiscontinuousConvMode = DISABLE;
+	hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO2;
+	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+	hadc1.Init.DMAContinuousRequests = ENABLE;
+	hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
+	hadc1.Init.OversamplingMode = DISABLE;
+	hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
+	if (HAL_ADC_Init(&hadc1) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_11;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Configure Regular Channel
+	 */
+	sConfig.Channel = ADC_CHANNEL_11;
+	sConfig.Rank = ADC_REGULAR_RANK_1;
+	sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_1;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Configure Regular Channel
+	 */
+	sConfig.Channel = ADC_CHANNEL_1;
+	sConfig.Rank = ADC_REGULAR_RANK_2;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_VREFINT;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
+	/** Configure Regular Channel
+	 */
+	sConfig.Channel = ADC_CHANNEL_VREFINT;
+	sConfig.Rank = ADC_REGULAR_RANK_3;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN ADC1_Init 2 */
 
-  /* USER CODE END ADC1_Init 2 */
+	/* USER CODE END ADC1_Init 2 */
 
 }
 
 /**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
+ * @brief TIM1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_TIM1_Init(void) {
 
-  /* USER CODE BEGIN TIM1_Init 0 */
+	/* USER CODE BEGIN TIM1_Init 0 */
 
-  /* USER CODE END TIM1_Init 0 */
+	/* USER CODE END TIM1_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+	TIM_ClockConfigTypeDef sClockSourceConfig = { 0 };
+	TIM_MasterConfigTypeDef sMasterConfig = { 0 };
+	TIM_OC_InitTypeDef sConfigOC = { 0 };
+	TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = { 0 };
 
-  /* USER CODE BEGIN TIM1_Init 1 */
+	/* USER CODE BEGIN TIM1_Init 1 */
 
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1600;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.BreakAFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
-  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
-  sBreakDeadTimeConfig.Break2Filter = 0;
-  sBreakDeadTimeConfig.Break2AFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
+	/* USER CODE END TIM1_Init 1 */
+	htim1.Instance = TIM1;
+	htim1.Init.Prescaler = 0;
+	htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim1.Init.Period = 1600;
+	htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim1.Init.RepetitionCounter = 0;
+	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	if (HAL_TIM_Base_Init(&htim1) != HAL_OK) {
+		Error_Handler();
+	}
+	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+	if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_TIM_PWM_Init(&htim1) != HAL_OK) {
+		Error_Handler();
+	}
+	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+	sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_UPDATE;
+	sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+	if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	sConfigOC.OCMode = TIM_OCMODE_PWM1;
+	sConfigOC.Pulse = 0;
+	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+	sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+	sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+	if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+	sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+	sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+	sBreakDeadTimeConfig.DeadTime = 0;
+	sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+	sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+	sBreakDeadTimeConfig.BreakFilter = 0;
+	sBreakDeadTimeConfig.BreakAFMode = TIM_BREAK_AFMODE_INPUT;
+	sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+	sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+	sBreakDeadTimeConfig.Break2Filter = 0;
+	sBreakDeadTimeConfig.Break2AFMode = TIM_BREAK_AFMODE_INPUT;
+	sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+	if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN TIM1_Init 2 */
 
-  /* USER CODE END TIM1_Init 2 */
+	/* USER CODE END TIM1_Init 2 */
 
 }
 
 /**
-  * @brief TIM3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM3_Init(void)
-{
+ * @brief TIM3 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_TIM3_Init(void) {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
+	/* USER CODE BEGIN TIM3_Init 0 */
 
-  /* USER CODE END TIM3_Init 0 */
+	/* USER CODE END TIM3_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+	TIM_ClockConfigTypeDef sClockSourceConfig = { 0 };
+	TIM_MasterConfigTypeDef sMasterConfig = { 0 };
+	TIM_OC_InitTypeDef sConfigOC = { 0 };
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+	/* USER CODE BEGIN TIM3_Init 1 */
 
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 1;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 32768;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
+	/* USER CODE END TIM3_Init 1 */
+	htim3.Instance = TIM3;
+	htim3.Init.Prescaler = 1;
+	htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim3.Init.Period = 32768;
+	htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	if (HAL_TIM_Base_Init(&htim3) != HAL_OK) {
+		Error_Handler();
+	}
+	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+	if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_TIM_OC_Init(&htim3) != HAL_OK) {
+		Error_Handler();
+	}
+	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+	sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+	if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	sConfigOC.OCMode = TIM_OCMODE_TIMING;
+	sConfigOC.Pulse = 0;
+	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+	if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN TIM3_Init 2 */
 
-  /* USER CODE END TIM3_Init 2 */
+	/* USER CODE END TIM3_Init 2 */
 
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
+ * Enable DMA controller clock
+ */
+static void MX_DMA_Init(void) {
 
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
+	/* DMA controller clock enable */
+	__HAL_RCC_DMA1_CLK_ENABLE();
 
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+	/* DMA interrupt init */
+	/* DMA1_Channel1_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);
+	HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_GPIO_Init(void) {
+	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
+	/* USER CODE BEGIN MX_GPIO_Init_1 */
 
-  /* USER CODE END MX_GPIO_Init_1 */
+	/* USER CODE END MX_GPIO_Init_1 */
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
+	/* GPIO Ports Clock Enable */
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|DP_Pin
-                          |D_Pin|E_Pin, GPIO_PIN_RESET);
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOB,
+	GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | DP_Pin | D_Pin | E_Pin,
+			GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|C_D4_Pin
-                          |G_Pin|C_Pin, GPIO_PIN_RESET);
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOA,
+	GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | C_D4_Pin | G_Pin | C_Pin,
+			GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PA6 PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	/*Configure GPIO pins : PA6 PA7 */
+	GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB2 DP_Pin
-                           D_Pin E_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|DP_Pin
-                          |D_Pin|E_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	/*Configure GPIO pins : PB0 PB1 PB2 DP_Pin
+	 D_Pin E_Pin */
+	GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | DP_Pin | D_Pin
+			| E_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA8 PA9 PA10 C_D4_Pin
-                           G_Pin C_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|C_D4_Pin
-                          |G_Pin|C_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	/*Configure GPIO pins : PA8 PA9 PA10 C_D4_Pin
+	 G_Pin C_Pin */
+	GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | C_D4_Pin
+			| G_Pin | C_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PC6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	/*Configure GPIO pin : PC6 */
+	GPIO_InitStruct.Pin = GPIO_PIN_6;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
+	/* USER CODE BEGIN MX_GPIO_Init_2 */
 
-  /* USER CODE END MX_GPIO_Init_2 */
+	/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -1299,39 +1109,36 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM14 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
+ * @brief  Period elapsed callback in non blocking mode
+ * @note   This function is called  when TIM14 interrupt took place, inside
+ * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+ * a global variable "uwTick" used as application time base.
+ * @param  htim : TIM handle
+ * @retval None
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	/* USER CODE BEGIN Callback 0 */
 
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM14)
-  {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
+	/* USER CODE END Callback 0 */
+	if (htim->Instance == TIM14) {
+		HAL_IncTick();
+	}
+	/* USER CODE BEGIN Callback 1 */
 
-  /* USER CODE END Callback 1 */
+	/* USER CODE END Callback 1 */
 }
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+	/* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-  /* USER CODE END Error_Handler_Debug */
+	/* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
 /**

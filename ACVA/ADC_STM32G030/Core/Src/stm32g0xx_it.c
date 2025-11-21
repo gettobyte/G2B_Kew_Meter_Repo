@@ -60,7 +60,7 @@ const uint8_t Segment_Patterns[38] = { 0b10000001,  // 0   [0]
 		0b10111000,  // F   [15]
 		0b10100000,  // G   [16] (same as 6)
 		0b11101000,  // H   [17]
-		0b11110001,  // I   [18] (looks like a vertical bar)
+		0b11001111,  // I   [18] (looks like a vertical bar)
 		0b11000111,  // J   [19]
 		0b10001001,  // K   [20] (approximated)
 		0b11100001,  // L   [21]
