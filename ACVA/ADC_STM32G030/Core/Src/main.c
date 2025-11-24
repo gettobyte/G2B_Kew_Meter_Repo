@@ -53,9 +53,6 @@ TIM_HandleTypeDef htim3;
 
 uint16_t digits[9];
 
-#define VREFINT_CAL_ADDR   ((uint16_t*)0x1FFF75AA)
-#define VREFINT_CAL_VREF   3000UL   // mV
-
 #define ADC_HISTORY_LEN 512
 
 #define BUTTON2_Pin GPIO_PIN_6
@@ -64,7 +61,6 @@ uint16_t digits[9];
 #define BUTTON1_Pin GPIO_PIN_7
 #define BUTTON1_GPIO_Port GPIOA
 
-static uint16_t counter = 0;
 
 #define SAMPLES_PER_CYCLE        512U
 #define ADC_NUM_CHANNELS         3U
@@ -78,7 +74,7 @@ volatile uint8_t buffer_ready = 0;
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint16_t vdda_mV = 0;       // calculated VDDA (mV)
 
-uint16_t AD_RES_BUFFER[ADC_DMA_COUNT];
+//uint16_t AD_RES_BUFFER[ADC_DMA_COUNT];
 
 float voltage = 0.0f;
 float current = 0.0f;
@@ -129,10 +125,10 @@ uint8_t saveChoice = 0;   // 0: Y, 1: N
 
 GPIO_PinState b1, b2;
 
+uint8_t dp_index;
+
 //static uint16_t adc_buffer[ADC_DMA_COUNT];
 
-/* Smoothing */
-static const float alpha = 0.2f;   // EMA on RMS
 
 /* Debug (watch in Live Expressions if desired) */
 volatile int dbg_nv = -1, dbg_ni = -1;
@@ -149,19 +145,26 @@ float threshold_i = 0.5f;
 const float alpha_v = 0.1f;  // slower, steadier EMA
 float threshold_v = 0.5f;
 
-#define CT_PR_DECIMAL_POS 1
-#define CT_SE_DECIMAL_POS 1
-
 float ct_pr_value = 1.0f;
 float ct_se_value = 1.0f;
 
 uint8_t ct_pr_digits[4] = { 1, 0, 0, 0 };  // 1.000
 uint8_t ct_se_digits[4] = { 1, 0, 0, 0 };  // 1.000
-uint8_t ct_pr_decimal_pos = CT_PR_DECIMAL_POS;
-uint8_t ct_se_decimal_pos = CT_SE_DECIMAL_POS;
+uint8_t ct_pr_decimal_pos = 0;
+uint8_t ct_se_decimal_pos = 0;
 
 uint8_t ct_pr_editing_digit = 0;  // Which digit is being edited (0-3)
-uint8_t ct_se_editing_digit = 0;  // Which digit is being edited (0-3)
+uint8_t ct_se_editing_digit = 0;  // Which digit is being edited (0-3);
+
+uint8_t ct_pr_state = 0;
+
+uint32_t ct_pr_blinkTimer = 0;
+uint8_t  ct_pr_blinkState = 0;
+
+uint8_t  ct_se_state = 0;
+uint32_t ct_se_blinkTimer = 0;
+uint8_t  ct_se_blinkState = 0;
+
 
 float PF_Phase_deg = 0.0f;                // optional displacement angle from PF
 
@@ -181,7 +184,6 @@ static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 static void process_block(uint16_t *blk, size_t count_halfwords);
 
-static void Compute_PF_FFT(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -258,6 +260,51 @@ static void process_block(uint16_t *blk, size_t count_halfwords) {
 
 }
 
+static float CT_Pr_DigitsToValue(void)
+{
+    uint16_t raw =
+        (uint16_t)(ct_pr_digits[0] * 1000U +
+                   ct_pr_digits[1] * 100U  +
+                   ct_pr_digits[2] * 10U   +
+                   ct_pr_digits[3]);
+
+    // decimal after digit index i => divide by 10^(3 - i)
+    uint8_t i = ct_pr_decimal_pos;
+    if (i > 3) i = 3;
+
+    uint8_t pow10 = 3 - i;
+    float scale = 1.0f;
+    while (pow10--) {
+        scale *= 10.0f;
+    }
+
+    return (float)raw / scale;
+}
+
+static float CT_Se_DigitsToValue(void)
+{
+    uint16_t raw =
+        (uint16_t)(ct_se_digits[0] * 1000U +
+                   ct_se_digits[1] * 100U  +
+                   ct_se_digits[2] * 10U   +
+                   ct_se_digits[3]);
+
+    // decimal after digit index i => divide by 10^(3 - i)
+    uint8_t i = ct_se_decimal_pos;
+    if (i > 3) i = 3;
+
+    uint8_t pow10 = 3 - i;
+    float scale = 1.0f;
+    while (pow10--) {
+        scale *= 10.0f;
+    }
+
+    return (float)raw / scale;
+}
+
+
+
+
 void Calculate_Vrms() {
 
 	float sum = 0.0f;
@@ -330,6 +377,12 @@ void Calculate_Irms() {
 
 }
 
+/* USER CODE END 0 */
+
+/**
+ * @brief  The application entry point.
+ * @retval int
+ */
 static void Compute_PF_FromBuffers(void) {
 	const uint16_t N = ADC_HISTORY_LEN;      // your 512
 	if (N == 0)
@@ -344,20 +397,20 @@ static void Compute_PF_FromBuffers(void) {
 	}
 
 	/* --- 2) Covariance = mean( (v - Vavg)*(i - Iavg) ) --- */
-	double acc = 0.0;
+	float acc = 0.0;
 	for (uint16_t n = 0; n < N; n++) {
 		float dv = (float) v_buf[n] - Vavg;   // your buffers are already in mV
 		float di = (float) i_buf[n] - Iavg;
-		acc += (double) dv * (double) di;
+		acc += (float) dv * (float) di;
 	}
-	const double cov_vi = acc / (double) N;
+	const float cov_vi = acc / (float) N;
 
 	/* --- 3) Instantaneous PF (clamped) --- */
 	const float denom = Vrms_total * Irms_total;
 	if (denom <= 1e-6f)
 		return;              // avoid div/0
 
-	float pf_inst = (float) (cov_vi / (double) denom);
+	float pf_inst = (float) (cov_vi / (float) denom);
 	if (!isfinite(pf_inst))
 		return;
 	if (pf_inst > 1.0f)
@@ -403,12 +456,6 @@ static void Compute_PF_FromBuffers(void) {
 	Power_Factor = out;
 }
 
-/* USER CODE END 0 */
-
-/**
- * @brief  The application entry point.
- * @retval int
- */
 int main(void) {
 
 	/* USER CODE BEGIN 1 */
@@ -494,7 +541,7 @@ int main(void) {
 					buffer_ready = 0;
 					Calculate_Vrms();
 					Calculate_Irms();
-//							        Compute_PF_FromBuffers();
+					Compute_PF_FromBuffers();
 				}
 			}
 		}
@@ -578,202 +625,452 @@ int main(void) {
 			}
 		}
 // =============== Step 3: Simple configuration MENU after correct password ================== //
-		else if (programming == 1) {
-			// Common debounce
-			uint32_t now = HAL_GetTick();
+		        else if (programming == 1) {
+		            // Common debounce
+		            uint32_t now = HAL_GetTick();
 
-			// ------------------- 1) Display logic (what to show on digits) ------------------- //
+		            // ------------------- 1) Display logic (what to show on digits) ------------------- //
+		            switch (mode) {
 
-			switch (mode) {
-			case 0: // Conn menu
-				if (connState == 0) {
-					// Show "Conn"
-					// C  o  n  n
-					digits[0] = 12;   // C
-					digits[1] = 24;   // o (lower o)
-					digits[2] = 23;   // n
-					digits[3] = 23;   // n
-				} else {
-					// connState == 1 (show current type) OR 2 (edit/blink current type)
-					if (connState == 2) {
-						// Blink current type
-						if (now - blinkTimer >= 300) {
-							blinkTimer = now;
-							blinkState = !blinkState;
-						}
+		            // ---------- MODE 0: Conn menu ----------
+		            case 0:
+		                if (connState == 0) {
+		                    // Show "Conn"
+		                    digits[0] = 12;   // C
+		                    digits[1] = 24;   // o
+		                    digits[2] = 23;   // n
+		                    digits[3] = 23;   // n
 
-						if (blinkState) {
-							// show blank when OFF
-							digits[0] = 37;
-							digits[1] = 37;
-							digits[2] = 37;
-							digits[3] = 37;
-						} else {
-							// show type text when ON
-							goto SHOW_CONN_TYPE;
-						}
-					} else {
-						SHOW_CONN_TYPE:
-						// Show current type without blinking
-						if (connType == 0) {
-							// "delt"
-							digits[0] = 13;  // d
-							digits[1] = 14;  // e
-							digits[2] = 21;  // L (for l)
-							digits[3] = 29;  // t
-						} else if (connType == 1) {
-							// "iph"
-							digits[0] = 18;  // I
-							digits[1] = 25;  // P
-							digits[2] = 17;  // H
-							digits[3] = 37;  // blank
-						} else // connType == 2
-						{
-							// "star"
-							digits[0] = 28;  // S
-							digits[1] = 29;  // T
-							digits[2] = 10;  // A
-							digits[3] = 27;  // R
-						}
-					}
-				}
-				break;
+		                    // No decimals on label
+		                    digits[4] = 0;
+		                    digits[5] = 0;
+		                    digits[6] = 0;
+		                    digits[7] = 0;
+		                } else {
+		                    if (connState == 2) {
+		                        // Blink current type
+		                        if (now - blinkTimer >= 300) {
+		                            blinkTimer = now;
+		                            blinkState = !blinkState;
+		                        }
 
-			case 1: // "ct.pr"
-				// c  t  p  r
-				digits[0] = 12;  // C
-				digits[1] = 29;  // T
-				digits[2] = 25;  // P
-				digits[3] = 27;  // R
-				digits[5] = 1;
+		                        if (blinkState) {
+		                            digits[0] = 37;
+		                            digits[1] = 37;
+		                            digits[2] = 37;
+		                            digits[3] = 37;
+		                            digits[4] = 0;
+		                            digits[5] = 0;
+		                            digits[6] = 0;
+		                            digits[7] = 0;
+		                        } else {
+		                            goto SHOW_CONN_TYPE;
+		                        }
+		                    } else {
+		SHOW_CONN_TYPE:
+		                        if (connType == 0) {
+		                            // "delt"
+		                            digits[0] = 13;  // d
+		                            digits[1] = 14;  // e
+		                            digits[2] = 21;  // L
+		                            digits[3] = 29;  // t
+		                        } else if (connType == 1) {
+		                            // "iph"
+		                            digits[0] = 18;  // I
+		                            digits[1] = 25;  // P
+		                            digits[2] = 17;  // H
+		                            digits[3] = 37;  // blank
+		                        } else {
+		                            // "star"
+		                            digits[0] = 28;  // S
+		                            digits[1] = 29;  // T
+		                            digits[2] = 10;  // A
+		                            digits[3] = 27;  // R
+		                        }
+		                        // No decimals for text
+		                        digits[4] = 0;
+		                        digits[5] = 0;
+		                        digits[6] = 0;
+		                        digits[7] = 0;
+		                    }
+		                }
+		                break;
 
-				if (b1 == GPIO_PIN_RESET) {
-					digits[0] = 1;
-					digits[1] = 0;
-					digits[2] = 0;
-					digits[3] = 0;
-					digits[5] = 0;
-					digits[4] = 1;
-				}
+		            // ---------- MODE 1: ct.pr ----------
+		            case 1:
+		            {
+		                if (ct_pr_state == 0)
+		                {
+		                    // Label: "ct.pr"
+		                    digits[0] = 12;  // C
+		                    digits[1] = 29;  // T
+		                    digits[2] = 25;  // P
+		                    digits[3] = 27;  // R
 
-				break;
+		                    // No decimal dots on label
+		                    digits[4] = 0;
+		                    digits[5] = 1;
+		                    digits[6] = 0;
+		                    digits[7] = 0;
+		                }
+		                else
+		                {
+		                    // Numeric display using ct_pr_digits + decimal position
+		                    digits[0] = ct_pr_digits[0];
+		                    digits[1] = ct_pr_digits[1];
+		                    digits[2] = ct_pr_digits[2];
+		                    digits[3] = ct_pr_digits[3];
 
-			case 2: // "ct.se"
-				// c  t  s  e
-				digits[0] = 12;  // C
-				digits[1] = 29;  // T
-				digits[2] = 28;  // S
-				digits[3] = 14;  // E
-				digits[5] = 1;
-				break;
+		                    // Clear all decimal flags first
+//		                        digits[4] = 0;
+//		                    	digits[5] = 0;
+//		                    	digits[6] = 0;
+//		                    	digits[7] = 0;
 
-			case 3: // SAVE y/n
-				// Always show "SAV"
-				digits[0] = 28;  // S
-				digits[1] = 10;  // A
-				digits[2] = 30;  // V
-				digits[5] = 0;
-				digits[6] = 1;
 
-				// Blink last digit (y or n)
-				if (now - blinkTimer >= 300) {
-					blinkTimer = now;
-					blinkState = !blinkState;
-				}
+		                    dp_index = ct_pr_decimal_pos;
+		                    if (dp_index > 3) dp_index = 3;
 
-				if (blinkState) {
-					digits[3] = 37;  // blank when OFF
-				} else {
-					if (saveChoice == 0) {
-						digits[3] = 34;  // Y  → SAVy
-					} else {
-						digits[3] = 23;  // n  → SAVn
-					}
-				}
-				break;
-			}
+		                    if (ct_pr_state == 1)
+		                    {
 
-			// ------------------- 2) Button handling (B1 / B2) ------------------- //
+		                        // View only, steady decimal
+		                        digits[4 + dp_index] = 1;
+		                    }
+		                    else if (ct_pr_state == 2)
+		                    {
+		                        // Edit digits with blink on selected digit
+		                        if (now - ct_pr_blinkTimer >= 300) {
+		                            ct_pr_blinkTimer = now;
+		                            ct_pr_blinkState = !ct_pr_blinkState;
+		                        }
 
-			if (now - lastPress > 200)   // simple debounce
-					{
-				// BUTTON 1: mainly "enter / edit / confirm"
-				if (b1 == GPIO_PIN_RESET) {
-					lastPress = now;
+		                        // Decimal ON steadily while editing digits
+		                        digits[4 + dp_index] = 1;
 
-					if (mode == 0) {
-						// Conn flow:
-						// Conn (0) --B1--> delt/iph/star (1)
-						//        --B1--> edit blink (2)
-						//        --B1--> back to Conn (0)
-						if (connState == 0) {
-							connState = 1;      // show current type
-						} else if (connState == 1) {
-							connState = 2;      // start editing (blink)
-							blinkState = 0;
-							blinkTimer = now;
-						} else // connState == 2
-						{
-							connState = 0;    // finish editing, go back to Conn
-						}
-					} else if (mode == 3) {
-						// In SAVE.y/n:
-						// B1 = CONFIRM current choice
-						if (saveChoice == 0) {
-							// YES → exit menu configuration completely
-							programming = 0;
-							inPasswordMode = 0;
-							modeEntryActive = 0;
-							connState = 0;
-							mode = 0;
-							digits[6] = 0;
-							digits[0] = 0;
-							digits[1] = 0;
-							digits[2] = 0;
-							digits[3] = 0;
-							digits[4] = 1;
+		                        if (ct_pr_blinkState) {
+		                            // Make current digit blank while blinkState=1
+		                            digits[ct_pr_editing_digit] = 37;
+		                            HAL_Delay(100);
+		                        }
+		                    }
+		                    else if (ct_pr_state == 3)
 
-							// (optional: clear digits here)
-						} else {
-							// NO → back to start of menu (Conn)
-							mode = 0;
-							connState = 0;
-							digits[6] = 0;
-							// still in programming mode
-						}
-					}
 
-				}
+		                    {
+		                        // Editing decimal position, blink the DP
+		                        if (now - ct_pr_blinkTimer >= 400) {
+		                            ct_pr_blinkTimer = now;
+		                            ct_pr_blinkState = !ct_pr_blinkState;
+		                        }
 
-				// BUTTON 2: "next / select / toggle"
-				else if (b2 == GPIO_PIN_RESET) {
-					lastPress = now;
+		                        if (ct_pr_blinkState) {
+		                            digits[4 + dp_index] = 0;  // decimal OFF
 
-					if (mode == 0) {
-						if (connState == 2) {
-							// While editing, B2 cycles delt / iph / star
-							connType = (connType + 1) % 3;
-						} else if (connState == 0) {
-							// When back to Conn (not editing), B2 moves to next menu item
-							mode = 1;          // go to ct.pr
-						}
-						// If connState == 1 (view type), ignore B2
-					} else if (mode == 1) {
-						// From ct.pr, B2 -> ct.se
-						mode = 2;
-					} else if (mode == 2) {
-						// From ct.se, B2 -> SAVE (start with Y blinking)
-						mode = 3;
-						saveChoice = 0;        // default Y
-						blinkState = 0;
-						blinkTimer = now;
-					} else if (mode == 3) {
-						// In SAVE.y/n, B2 toggles between Y and n
-						saveChoice ^= 1;       // 0 -> 1, 1 -> 0
-					}
-				}
-			}
-		}
+		                        } else {
+		                            digits[4 + dp_index] = 1;  // decimal ON
+		                            HAL_Delay(100);
+		                        }
+		                    }
+		                }
+		            }
+		                break;
+
+		            // ---------- MODE 2: ct.se ----------
+		            case 2:
+		            {
+		                if (ct_se_state == 0)
+		                {
+		                    // Label: "ct.se"
+		                    digits[0] = 12;  // C
+		                    digits[1] = 29;  // T
+		                    digits[2] = 28;  // S
+		                    digits[3] = 14;  // E
+
+		                    // No decimal dots on label
+		                    digits[4] = 0;
+		                    digits[5] = 1;
+		                    digits[6] = 0;
+		                    digits[7] = 0;
+		                }
+		                else
+		                {
+		                    // Numeric display using ct_se_digits + decimal position
+		                    digits[0] = ct_se_digits[0];
+		                    digits[1] = ct_se_digits[1];
+		                    digits[2] = ct_se_digits[2];
+		                    digits[3] = ct_se_digits[3];
+
+		                    // Clear decimals
+//		                    digits[4] = 0;
+//		                    digits[5] = 0;
+//		                    digits[6] = 0;
+//		                    digits[7] = 0;
+
+		                    uint8_t dp_index = ct_se_decimal_pos;
+		                    if (dp_index > 3) dp_index = 3;
+
+		                    if (ct_se_state == 1)
+		                    {
+		                        // View only
+		                        digits[4 + dp_index] = 1;
+		                    }
+		                    else if (ct_se_state == 2)
+		                    {
+		                        // Edit digits with blink
+		                        if (now - ct_se_blinkTimer >= 400) {
+		                            ct_se_blinkTimer = now;
+		                            ct_se_blinkState = !ct_se_blinkState;
+		                        }
+
+		                        digits[4 + dp_index] = 1;  // decimal steady
+
+		                        if (ct_se_blinkState) {
+		                            digits[ct_se_editing_digit] = 37;
+		                            HAL_Delay(100);
+		                        }
+		                    }
+		                    else if (ct_se_state == 3)
+		                    {
+		                        // Edit decimal position, blink DP
+		                        if (now - ct_se_blinkTimer >= 400) {
+		                            ct_se_blinkTimer = now;
+		                            ct_se_blinkState = !ct_se_blinkState;
+		                        }
+
+		                        if (ct_se_blinkState) {
+		                            digits[4 + dp_index] = 0;
+		                        } else {
+		                            digits[4 + dp_index] = 1;
+		                        }
+		                    }
+		                }
+		            }
+		                break;
+
+		            // ---------- MODE 3: SAVE y/n ----------
+		            case 3:
+		                // "SAV"
+		                digits[0] = 28;  // S
+		                digits[1] = 10;  // A
+		                digits[2] = 30;  // V
+
+		                // No decimals
+		                digits[4] = 0;
+		                digits[5] = 0;
+		                digits[6] = 1;
+		                digits[7] = 0;
+
+		                if (now - blinkTimer >= 300) {
+		                    blinkTimer = now;
+		                    blinkState = !blinkState;
+		                }
+
+		                if (blinkState) {
+		                    digits[3] = 37;  // blank
+		                } else {
+		                    digits[3] = (saveChoice == 0) ? 34 : 23;   // Y / n
+
+		                }
+		                break;
+		            }
+
+		            // ------------------- 2) Button handling (B1 / B2) ------------------- //
+		            if (now - lastPress > 200)   // simple debounce
+		            {
+		                // BUTTON 1: "enter / edit / confirm"
+		                if (b1 == GPIO_PIN_RESET) {
+		                    lastPress = now;
+
+		                    // ----- MODE 0: Conn -----
+		                    if (mode == 0) {
+		                        if (connState == 0) {
+		                            connState = 1;      // show current type
+		                        } else if (connState == 1) {
+		                            connState = 2;      // start editing (blink)
+		                            blinkState = 0;
+		                            blinkTimer = now;
+		                        } else { // connState == 2
+		                            connState = 0;      // finish editing
+		                        }
+		                    }
+
+		                    // ----- MODE 1: ct.pr -----
+		                    else if (mode == 1)
+		                    {
+		                        if (ct_pr_state == 0) {
+		                            // Label -> numeric view
+		                            ct_pr_state = 1;
+		                            digits[5] = 0;
+		                        }
+		                        else if (ct_pr_state == 1) {
+		                            // View -> edit digit 0
+		                            ct_pr_state         = 2;
+		                            ct_pr_editing_digit = 0;
+		                            ct_pr_blinkState    = 0;
+		                            ct_pr_blinkTimer    = now;
+		                        }
+		                        else if (ct_pr_state == 2) {
+		                            // Next digit or decimal edit
+		                            if (ct_pr_editing_digit < 3) {
+		                                ct_pr_editing_digit++;
+		                                ct_pr_blinkState = 0;
+		                                ct_pr_blinkTimer = now;
+		                            } else {
+		                                ct_pr_state      = 3;  // go to decimal edit
+		                                ct_pr_blinkState = 0;
+
+		                                ct_pr_blinkTimer = now;
+		                            }
+		                        }
+		                        else if (ct_pr_state == 3) {
+		                            // Finish edit, compute value, go back to label
+		                            ct_pr_value = CT_Pr_DigitsToValue();
+		                            ct_pr_state = 0;
+
+		                        }
+		                    }
+
+		                    // ----- MODE 2: ct.se -----
+		                    else if (mode == 2)
+		                    {
+		                        if (ct_se_state == 0) {
+		                            // Label -> numeric view
+		                        	 digits[5] = 0;
+		                            ct_se_state = 1;
+		                        }
+		                        else if (ct_se_state == 1) {
+		                            // View -> edit digit 0
+		                            ct_se_state         = 2;
+		                            ct_se_editing_digit = 0;
+		                            ct_se_blinkState    = 0;
+		                            ct_se_blinkTimer    = now;
+		                        }
+		                        else if (ct_se_state == 2) {
+		                            if (ct_se_editing_digit < 3) {
+		                                ct_se_editing_digit++;
+		                                ct_se_blinkState = 0;
+		                                ct_se_blinkTimer = now;
+		                            } else {
+		                                ct_se_state      = 3;  // decimal edit
+		                                ct_se_blinkState = 0;
+		                                ct_se_blinkTimer = now;
+		                            }
+		                        }
+		                        else if (ct_se_state == 3) {
+		                            // Finish edit
+		                            ct_se_value = CT_Se_DigitsToValue();
+		                            ct_se_state = 0;
+		                        }
+		                    }
+
+		                    // ----- MODE 3: SAVE -----
+		                    else if (mode == 3) {
+		                        if (saveChoice == 0) {
+		                            // YES → exit programming
+		                            programming     = 0;
+		                            inPasswordMode  = 0;
+		                            modeEntryActive = 0;
+		                            connState       = 0;
+		                            mode            = 0;
+		                            // Clear main digits
+		                            digits[0] = digits[1] = digits[2] = digits[3] = 0;
+		                            digits[5] = digits[6] = digits[7] = 0;
+		                            digits[4] = 1;
+		                        } else {
+		                            // NO → back to Conn
+		                            mode      = 0;
+		                            connState = 0;
+		                            digits[6] = 0;
+		                        }
+		                    }
+		                }
+
+		                // BUTTON 2: "next / increment / toggle"
+		                else if (b2 == GPIO_PIN_RESET) {
+		                    lastPress = now;
+
+		                    // ----- MODE 0: Conn -----
+		                    if (mode == 0) {
+		                        if (connState == 2) {
+		                            connType = (connType + 1) % 3;
+		                        } else if (connState == 0) {
+		                            mode        = 1;   // go to ct.pr
+		                            ct_pr_state = 0;
+		                        }
+		                    }
+
+		                    // ----- MODE 1: ct.pr -----
+		                    else if (mode == 1)
+		                    {
+		                        if (ct_pr_state == 0) {
+		                            // Label: B2 -> next menu (ct.se)
+		                            mode        = 2;
+		                            ct_se_state = 0;
+		                        }
+		                        else if (ct_pr_state == 1) {
+		                            // View only: B2 no-op (optional)
+		                        }
+		                        else if (ct_pr_state == 2) {
+		                            // Increment current digit
+		                            uint8_t *pd = &ct_pr_digits[ct_pr_editing_digit];
+		                            (*pd)++;
+		                            if (*pd > 9) *pd = 0;
+		                        }
+		                        else if (ct_pr_state == 3) {
+		                            // Cycle decimal position 0..3
+		                            digits[4] = 0;
+		                            digits[5] = 0;
+		                            digits[6] = 0;
+		                            digits[7] = 0;
+		                            ct_pr_decimal_pos++;
+		                            if (ct_pr_decimal_pos > 3)
+		                                ct_pr_decimal_pos = 0;
+		                        }
+		                    }
+
+		                    // ----- MODE 2: ct.se -----
+		                    else if (mode == 2)
+		                    {
+		                        if (ct_se_state == 0) {
+		                            // Label: B2 -> SAVE menu
+		                            mode       = 3;
+		                            saveChoice = 0;
+		                            blinkState = 0;
+		                            blinkTimer = now;
+		                        }
+		                        else if (ct_se_state == 1) {
+		                            // View only: no-op
+		                        }
+		                        else if (ct_se_state == 2) {
+		                            // Increment digit
+		                            uint8_t *pd = &ct_se_digits[ct_se_editing_digit];
+		                            (*pd)++;
+		                            if (*pd > 9) *pd = 0;
+		                        }
+		                        else if (ct_se_state == 3) {
+		                            // Cycle decimal position
+
+		                            digits[4] = 0;
+		                     		digits[5] = 0;
+		                     		digits[6] = 0;
+		                     		digits[7] = 0;
+		                            ct_se_decimal_pos++;
+		                            if (ct_se_decimal_pos > 3)
+		                                ct_se_decimal_pos = 0;
+		                        }
+		                    }
+
+		                    // ----- MODE 3: SAVE -----
+		                    else if (mode == 3) {
+		                        // Toggle Y/N
+		                        saveChoice ^= 1;
+		                    }
+		                }
+		            }
+		        }
+
+
 
 	}
 
