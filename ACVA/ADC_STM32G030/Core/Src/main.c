@@ -61,7 +61,6 @@ uint16_t digits[9];
 #define BUTTON1_Pin GPIO_PIN_7
 #define BUTTON1_GPIO_Port GPIOA
 
-
 #define SAMPLES_PER_CYCLE        512U
 #define ADC_NUM_CHANNELS         3U
 #define ADC_DMA_COUNT            (SAMPLES_PER_CYCLE * ADC_NUM_CHANNELS)   // 1024 halfwords
@@ -129,7 +128,6 @@ uint8_t dp_index;
 
 //static uint16_t adc_buffer[ADC_DMA_COUNT];
 
-
 /* Debug (watch in Live Expressions if desired) */
 volatile int dbg_nv = -1, dbg_ni = -1;
 volatile float dbg_dt = 0.0f, dbg_phi = 0.0f;
@@ -159,12 +157,11 @@ uint8_t ct_se_editing_digit = 0;  // Which digit is being edited (0-3);
 uint8_t ct_pr_state = 0;
 
 uint32_t ct_pr_blinkTimer = 0;
-uint8_t  ct_pr_blinkState = 0;
+uint8_t ct_pr_blinkState = 0;
 
-uint8_t  ct_se_state = 0;
+uint8_t ct_se_state = 0;
 uint32_t ct_se_blinkTimer = 0;
-uint8_t  ct_se_blinkState = 0;
-
+uint8_t ct_se_blinkState = 0;
 
 float PF_Phase_deg = 0.0f;                // optional displacement angle from PF
 
@@ -260,50 +257,41 @@ static void process_block(uint16_t *blk, size_t count_halfwords) {
 
 }
 
-static float CT_Pr_DigitsToValue(void)
-{
-    uint16_t raw =
-        (uint16_t)(ct_pr_digits[0] * 1000U +
-                   ct_pr_digits[1] * 100U  +
-                   ct_pr_digits[2] * 10U   +
-                   ct_pr_digits[3]);
+static float CT_Pr_DigitsToValue(void) {
+	uint16_t raw = (uint16_t) (ct_pr_digits[0] * 1000U + ct_pr_digits[1] * 100U
+			+ ct_pr_digits[2] * 10U + ct_pr_digits[3]);
 
-    // decimal after digit index i => divide by 10^(3 - i)
-    uint8_t i = ct_pr_decimal_pos;
-    if (i > 3) i = 3;
+	// decimal after digit index i => divide by 10^(3 - i)
+	uint8_t i = ct_pr_decimal_pos;
+	if (i > 3)
+		i = 3;
 
-    uint8_t pow10 = 3 - i;
-    float scale = 1.0f;
-    while (pow10--) {
-        scale *= 10.0f;
-    }
+	uint8_t pow10 = 3 - i;
+	float scale = 1.0f;
+	while (pow10--) {
+		scale *= 10.0f;
+	}
 
-    return (float)raw / scale;
+	return (float) raw / scale;
 }
 
-static float CT_Se_DigitsToValue(void)
-{
-    uint16_t raw =
-        (uint16_t)(ct_se_digits[0] * 1000U +
-                   ct_se_digits[1] * 100U  +
-                   ct_se_digits[2] * 10U   +
-                   ct_se_digits[3]);
+static float CT_Se_DigitsToValue(void) {
+	uint16_t raw = (uint16_t) (ct_se_digits[0] * 1000U + ct_se_digits[1] * 100U
+			+ ct_se_digits[2] * 10U + ct_se_digits[3]);
 
-    // decimal after digit index i => divide by 10^(3 - i)
-    uint8_t i = ct_se_decimal_pos;
-    if (i > 3) i = 3;
+	// decimal after digit index i => divide by 10^(3 - i)
+	uint8_t i = ct_se_decimal_pos;
+	if (i > 3)
+		i = 3;
 
-    uint8_t pow10 = 3 - i;
-    float scale = 1.0f;
-    while (pow10--) {
-        scale *= 10.0f;
-    }
+	uint8_t pow10 = 3 - i;
+	float scale = 1.0f;
+	while (pow10--) {
+		scale *= 10.0f;
+	}
 
-    return (float)raw / scale;
+	return (float) raw / scale;
 }
-
-
-
 
 void Calculate_Vrms() {
 
@@ -340,6 +328,80 @@ void Calculate_Vrms() {
 
 	Vrms_filtered = (alpha_v * Vrms_AC) + ((1.0f - alpha_v) * Vrms_filtered);
 
+	static float ema_voltage = 0.0f;
+	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+
+	ema_voltage = ema_voltage + EMA_ALPHA * (Vrms_filtered - ema_voltage);
+
+	/* --- Stable display logic with hysteresis --- */
+	static float last_display_voltage = 0.0f;
+	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+	float display_voltage = 0;
+
+	int val_int;
+
+	if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD) {
+		last_display_voltage = ema_voltage;
+	}
+
+	display_voltage = last_display_voltage;
+
+	// After computing display_voltage
+	if (fabsf(display_voltage) <= 0.3f)   // anything below 50 mV = 0.00
+		display_voltage = 0.0f;
+
+	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
+	if (display_voltage > 200.0f)
+		display_voltage = 200.0f;
+	if (display_voltage < 0.0f)
+		display_voltage = 0.0f;
+
+	/* ---------- Clear digits & DPs ---------- */
+	for (int i = 0; i < 4; i++) {
+		digits[i] = 0;
+		digits[8 + i] = 0;
+	}
+
+	/* ---------- Extract digits + Set DP ---------- */
+	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
+	if (display_voltage < 10.0f) {
+		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+		val_int = (int) (display_voltage * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+
+		digits[0] = (val_int / 100) % 10;  // integer part
+		digits[1] = (val_int / 10) % 10;   // first decimal
+		digits[2] = val_int % 10;          // second decimal
+		digits[3] = 0;              // optional: fill with fake digit if desired
+
+		digits[4] = 1;  // DP after first digit (X.XX)
+		digits[5] = 0;
+		digits[6] = 0;
+	} else if (display_voltage < 100.0f) {
+		// Format: XX.XX (tens, ones, two decimals)
+		val_int = (int) (display_voltage * 100 + 0.5f);  // e.g. 23.45 -> 2345
+
+		digits[0] = (val_int / 1000) % 10; // tens
+		digits[1] = (val_int / 100) % 10;  // ones
+		digits[2] = (val_int / 10) % 10;   // first decimal
+		digits[3] = val_int % 10;         // second decimal
+
+		digits[5] = 1;  // DP after second digit (XX.XX)
+		digits[4] = 0;
+		digits[6] = 0;
+	} else {
+		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+		val_int = (int) (display_voltage * 10 + 0.5f);  // e.g. 123.4 -> 1234
+
+		digits[0] = (val_int / 1000) % 10; // hundreds
+		digits[1] = (val_int / 100) % 10;  // tens
+		digits[2] = (val_int / 10) % 10;   // ones
+		digits[3] = val_int % 10;         // first decimal
+
+		digits[6] = 1;  // DP after third digit (XXX.X)
+		digits[4] = 0;
+		digits[5] = 0;
+	}
+
 }
 
 void Calculate_Irms() {
@@ -374,6 +436,80 @@ void Calculate_Irms() {
 	}
 
 	Irms_filtered = (alpha_i * Irms_AC) + ((1.0f - alpha_i) * Irms_filtered);
+
+	static float ema_current = 0.0f;
+	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+
+	ema_current = ema_current + EMA_ALPHA * (Irms_filtered - ema_current);
+
+	/* --- Stable display logic with hysteresis --- */
+	static float last_display_current = 0.0f;
+	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+	float display_current = 0;
+
+	int val_int;
+
+	if (fabsf(ema_current - last_display_current) >= DISPLAY_THRESHOLD) {
+		last_display_current = ema_current;
+	}
+
+	display_current = last_display_current;
+
+	// After computing display_voltage
+	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
+		display_current = 0.0f;
+
+	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
+	if (display_current > 200.0f)
+		display_current = 200.0f;
+	if (display_current < 0.0f)
+		display_current = 0.0f;
+
+	/* ---------- Clear digits & DPs ---------- */
+	for (int i = 0; i < 9; i++) {
+		digits[i] = 0;
+
+	}
+
+	/* ---------- Extract digits + Set DP ---------- */
+	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
+	if (display_current < 10.0f) {
+		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+		val_int = (int) (display_current * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+
+		digits[0] = (val_int / 100) % 10;  // integer part
+		digits[1] = (val_int / 10) % 10;   // first decimal
+		digits[2] = val_int % 10;          // second decimal
+		digits[3] = 0;              // optional: fill with fake digit if desired
+
+		digits[4] = 1;  // DP after first digit (X.XX)
+		digits[5] = 0;
+		digits[6] = 0;
+	} else if (display_current < 100.0f) {
+		// Format: XX.XX (tens, ones, two decimals)
+		val_int = (int) (display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
+
+		digits[0] = (val_int / 1000) % 10; // tens
+		digits[1] = (val_int / 100) % 10;  // ones
+		digits[2] = (val_int / 10) % 10;   // first decimal
+		digits[3] = val_int % 10;         // second decimal
+
+		digits[5] = 1;  // DP after second digit (XX.XX)
+		digits[4] = 0;
+		digits[6] = 0;
+	} else {
+		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+		val_int = (int) (display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
+
+		digits[0] = (val_int / 1000) % 10; // hundreds
+		digits[1] = (val_int / 100) % 10;  // tens
+		digits[2] = (val_int / 10) % 10;   // ones
+		digits[3] = val_int % 10;         // first decimal
+
+		digits[6] = 1;  // DP after third digit (XXX.X)
+		digits[4] = 0;
+		digits[5] = 0;
+	}
 
 }
 
@@ -454,6 +590,56 @@ static void Compute_PF_FromBuffers(void) {
 		out = -1.0f;
 	last_out = out;
 	Power_Factor = out;
+
+	static float ema_current = 0.0f;
+	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+
+	Power_Factor = Power_Factor + EMA_ALPHA * (Irms_filtered - ema_current);
+
+	/* --- Stable display logic with hysteresis --- */
+	static float last_display_current = 0.0f;
+	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+	float display_current = 0;
+
+	int val_int;
+
+	if (fabsf(Power_Factor - last_display_current) >= DISPLAY_THRESHOLD) {
+		last_display_current = ema_current;
+	}
+
+	display_current = last_display_current;
+
+	// After computing display_voltage
+	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
+		display_current = 0.0f;
+
+	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
+	if (display_current > 200.0f)
+		display_current = 200.0f;
+	if (display_current < 0.0f)
+		display_current = 0.0f;
+
+	/* ---------- Clear digits & DPs ---------- */
+	for (int i = 0; i < 9; i++) {
+		digits[i] = 0;
+
+	}
+
+	/* ---------- Extract digits + Set DP ---------- */
+	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
+	if (display_current < 10.0f) {
+		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+		val_int = (int) (display_current * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+
+		digits[0] = (val_int / 100) % 10;  // integer part
+		digits[1] = (val_int / 10) % 10;   // first decimal
+		digits[2] = val_int % 10;          // second decimal
+		digits[3] = 0;              // optional: fill with fake digit if desired
+
+		digits[4] = 1;  // DP after first digit (X.XX)
+		digits[5] = 0;
+		digits[6] = 0;
+	}
 }
 
 int main(void) {
@@ -501,6 +687,7 @@ int main(void) {
 	digits[2] = 0;
 	digits[3] = 0;
 	digits[4] = 1;
+	digits[8] = 48;
 
 	/* USER CODE END 2 */
 
@@ -537,13 +724,47 @@ int main(void) {
 				}
 			} else {
 				waitingFor2Sec = 0;
-				if (buffer_ready) {
-					buffer_ready = 0;
-					Calculate_Vrms();
-					Calculate_Irms();
-					Compute_PF_FromBuffers();
+
+				if (b1 == GPIO_PIN_RESET) {
+					while (1) {
+						flag = 0;
+						Calculate_Vrms();
+						digits[8] = 40;
+						b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+						if (b2 == GPIO_PIN_RESET) {
+							flag = 1;
+							break;
+						}
+					}
 				}
 			}
+			if (flag == 1) {
+
+				while (1) {
+
+					Calculate_Irms();
+					digits[8] = 42;
+					b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+					if (b2 == GPIO_PIN_RESET) {
+						flag = 0;
+						break;
+					}
+				}
+
+			}
+
+			if (flag == 2) {
+				while (1) {
+
+					Compute_PF_FromBuffers();
+					b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+					if (b2 == GPIO_PIN_RESET) {
+						flag = 0;
+						break;
+					}
+				}
+			}
+
 		}
 
 // ============================== Step 2: Enter password mode ============================== //
@@ -625,452 +846,418 @@ int main(void) {
 			}
 		}
 // =============== Step 3: Simple configuration MENU after correct password ================== //
-		        else if (programming == 1) {
-		            // Common debounce
-		            uint32_t now = HAL_GetTick();
+		else if (programming == 1) {
+			// Common debounce
+			uint32_t now = HAL_GetTick();
 
-		            // ------------------- 1) Display logic (what to show on digits) ------------------- //
-		            switch (mode) {
+			// ------------------- 1) Display logic (what to show on digits) ------------------- //
+			switch (mode) {
 
-		            // ---------- MODE 0: Conn menu ----------
-		            case 0:
-		                if (connState == 0) {
-		                    // Show "Conn"
-		                    digits[0] = 12;   // C
-		                    digits[1] = 24;   // o
-		                    digits[2] = 23;   // n
-		                    digits[3] = 23;   // n
+			// ---------- MODE 0: Conn menu ----------
+			case 0:
+				if (connState == 0) {
+					// Show "Conn"
+					digits[0] = 12; // C
+					digits[1] = 24; // o
+					digits[2] = 23; // n
+					digits[3] = 23; // n
 
-		                    // No decimals on label
-		                    digits[4] = 0;
-		                    digits[5] = 0;
-		                    digits[6] = 0;
-		                    digits[7] = 0;
-		                } else {
-		                    if (connState == 2) {
-		                        // Blink current type
-		                        if (now - blinkTimer >= 300) {
-		                            blinkTimer = now;
-		                            blinkState = !blinkState;
-		                        }
+					// No decimals on label
+					digits[4] = 0;
+					digits[5] = 0;
+					digits[6] = 0;
+					digits[7] = 0;
+				} else {
+					if (connState == 2) {
+						// Blink current type
+						if (now - blinkTimer >= 300) {
+							blinkTimer = now;
+							blinkState = !blinkState;
+						}
 
-		                        if (blinkState) {
-		                            digits[0] = 37;
-		                            digits[1] = 37;
-		                            digits[2] = 37;
-		                            digits[3] = 37;
-		                            digits[4] = 0;
-		                            digits[5] = 0;
-		                            digits[6] = 0;
-		                            digits[7] = 0;
-		                        } else {
-		                            goto SHOW_CONN_TYPE;
-		                        }
-		                    } else {
-		SHOW_CONN_TYPE:
-		                        if (connType == 0) {
-		                            // "delt"
-		                            digits[0] = 13;  // d
-		                            digits[1] = 14;  // e
-		                            digits[2] = 21;  // L
-		                            digits[3] = 29;  // t
-		                        } else if (connType == 1) {
-		                            // "iph"
-		                            digits[0] = 18;  // I
-		                            digits[1] = 25;  // P
-		                            digits[2] = 17;  // H
-		                            digits[3] = 37;  // blank
-		                        } else {
-		                            // "star"
-		                            digits[0] = 28;  // S
-		                            digits[1] = 29;  // T
-		                            digits[2] = 10;  // A
-		                            digits[3] = 27;  // R
-		                        }
-		                        // No decimals for text
-		                        digits[4] = 0;
-		                        digits[5] = 0;
-		                        digits[6] = 0;
-		                        digits[7] = 0;
-		                    }
-		                }
-		                break;
+						if (blinkState) {
+							digits[0] = 37;
+							digits[1] = 37;
+							digits[2] = 37;
+							digits[3] = 37;
+							digits[4] = 0;
+							digits[5] = 0;
+							digits[6] = 0;
+							digits[7] = 0;
+						} else {
+							goto SHOW_CONN_TYPE;
+						}
+					} else {
+						SHOW_CONN_TYPE: if (connType == 0) {
+							// "delt"
+							digits[0] = 13; // d
+							digits[1] = 14; // e
+							digits[2] = 21; // L
+							digits[3] = 29; // t
+						} else if (connType == 1) {
+							// "iph"
+							digits[0] = 18; // I
+							digits[1] = 25; // P
+							digits[2] = 17; // H
+							digits[3] = 37; // blank
+						} else {
+							// "star"
+							digits[0] = 28; // S
+							digits[1] = 29; // T
+							digits[2] = 10; // A
+							digits[3] = 27; // R
+						}
+						// No decimals for text
+						digits[4] = 0;
+						digits[5] = 0;
+						digits[6] = 0;
+						digits[7] = 0;
+					}
+				}
+				break;
 
-		            // ---------- MODE 1: ct.pr ----------
-		            case 1:
-		            {
-		                if (ct_pr_state == 0)
-		                {
-		                    // Label: "ct.pr"
-		                    digits[0] = 12;  // C
-		                    digits[1] = 29;  // T
-		                    digits[2] = 25;  // P
-		                    digits[3] = 27;  // R
+				// ---------- MODE 1: ct.pr ----------
+			case 1: {
+				if (ct_pr_state == 0) {
+					// Label: "ct.pr"
+					digits[0] = 12; // C
+					digits[1] = 29; // T
+					digits[2] = 25; // P
+					digits[3] = 27; // R
 
-		                    // No decimal dots on label
-		                    digits[4] = 0;
-		                    digits[5] = 1;
-		                    digits[6] = 0;
-		                    digits[7] = 0;
-		                }
-		                else
-		                {
-		                    // Numeric display using ct_pr_digits + decimal position
-		                    digits[0] = ct_pr_digits[0];
-		                    digits[1] = ct_pr_digits[1];
-		                    digits[2] = ct_pr_digits[2];
-		                    digits[3] = ct_pr_digits[3];
+					// No decimal dots on label
+					digits[4] = 0;
+					digits[5] = 1;
+					digits[6] = 0;
+					digits[7] = 0;
+				} else {
+					// Numeric display using ct_pr_digits + decimal position
+					digits[0] = ct_pr_digits[0];
+					digits[1] = ct_pr_digits[1];
+					digits[2] = ct_pr_digits[2];
+					digits[3] = ct_pr_digits[3];
 
-		                    // Clear all decimal flags first
+					// Clear all decimal flags first
 //		                        digits[4] = 0;
 //		                    	digits[5] = 0;
 //		                    	digits[6] = 0;
 //		                    	digits[7] = 0;
 
+					dp_index = ct_pr_decimal_pos;
+					if (dp_index > 3)
+						dp_index = 3;
 
-		                    dp_index = ct_pr_decimal_pos;
-		                    if (dp_index > 3) dp_index = 3;
+					if (ct_pr_state == 1) {
 
-		                    if (ct_pr_state == 1)
-		                    {
+						// View only, steady decimal
+						digits[4 + dp_index] = 1;
+					} else if (ct_pr_state == 2) {
+						// Edit digits with blink on selected digit
+						if (now - ct_pr_blinkTimer >= 300) {
+							ct_pr_blinkTimer = now;
+							ct_pr_blinkState = !ct_pr_blinkState;
+						}
 
-		                        // View only, steady decimal
-		                        digits[4 + dp_index] = 1;
-		                    }
-		                    else if (ct_pr_state == 2)
-		                    {
-		                        // Edit digits with blink on selected digit
-		                        if (now - ct_pr_blinkTimer >= 300) {
-		                            ct_pr_blinkTimer = now;
-		                            ct_pr_blinkState = !ct_pr_blinkState;
-		                        }
+						// Decimal ON steadily while editing digits
+						digits[4 + dp_index] = 1;
 
-		                        // Decimal ON steadily while editing digits
-		                        digits[4 + dp_index] = 1;
+						if (ct_pr_blinkState) {
+							// Make current digit blank while blinkState=1
+							digits[ct_pr_editing_digit] = 37;
+							HAL_Delay(100);
+						}
+					} else if (ct_pr_state == 3)
 
-		                        if (ct_pr_blinkState) {
-		                            // Make current digit blank while blinkState=1
-		                            digits[ct_pr_editing_digit] = 37;
-		                            HAL_Delay(100);
-		                        }
-		                    }
-		                    else if (ct_pr_state == 3)
+					{
+						// Editing decimal position, blink the DP
+						if (now - ct_pr_blinkTimer >= 400) {
+							ct_pr_blinkTimer = now;
+							ct_pr_blinkState = !ct_pr_blinkState;
+						}
 
+						if (ct_pr_blinkState) {
+							digits[4 + dp_index] = 0;  // decimal OFF
 
-		                    {
-		                        // Editing decimal position, blink the DP
-		                        if (now - ct_pr_blinkTimer >= 400) {
-		                            ct_pr_blinkTimer = now;
-		                            ct_pr_blinkState = !ct_pr_blinkState;
-		                        }
+						} else {
+							digits[4 + dp_index] = 1;  // decimal ON
+							HAL_Delay(100);
+						}
+					}
+				}
+			}
+				break;
 
-		                        if (ct_pr_blinkState) {
-		                            digits[4 + dp_index] = 0;  // decimal OFF
+				// ---------- MODE 2: ct.se ----------
+			case 2: {
+				if (ct_se_state == 0) {
+					// Label: "ct.se"
+					digits[0] = 12;  // C
+					digits[1] = 29;  // T
+					digits[2] = 28;  // S
+					digits[3] = 14;  // E
 
-		                        } else {
-		                            digits[4 + dp_index] = 1;  // decimal ON
-		                            HAL_Delay(100);
-		                        }
-		                    }
-		                }
-		            }
-		                break;
+					// No decimal dots on label
+					digits[4] = 0;
+					digits[5] = 1;
+					digits[6] = 0;
+					digits[7] = 0;
+				} else {
+					// Numeric display using ct_se_digits + decimal position
+					digits[0] = ct_se_digits[0];
+					digits[1] = ct_se_digits[1];
+					digits[2] = ct_se_digits[2];
+					digits[3] = ct_se_digits[3];
 
-		            // ---------- MODE 2: ct.se ----------
-		            case 2:
-		            {
-		                if (ct_se_state == 0)
-		                {
-		                    // Label: "ct.se"
-		                    digits[0] = 12;  // C
-		                    digits[1] = 29;  // T
-		                    digits[2] = 28;  // S
-		                    digits[3] = 14;  // E
-
-		                    // No decimal dots on label
-		                    digits[4] = 0;
-		                    digits[5] = 1;
-		                    digits[6] = 0;
-		                    digits[7] = 0;
-		                }
-		                else
-		                {
-		                    // Numeric display using ct_se_digits + decimal position
-		                    digits[0] = ct_se_digits[0];
-		                    digits[1] = ct_se_digits[1];
-		                    digits[2] = ct_se_digits[2];
-		                    digits[3] = ct_se_digits[3];
-
-		                    // Clear decimals
+					// Clear decimals
 //		                    digits[4] = 0;
 //		                    digits[5] = 0;
 //		                    digits[6] = 0;
 //		                    digits[7] = 0;
 
-		                    uint8_t dp_index = ct_se_decimal_pos;
-		                    if (dp_index > 3) dp_index = 3;
+					uint8_t dp_index = ct_se_decimal_pos;
+					if (dp_index > 3)
+						dp_index = 3;
 
-		                    if (ct_se_state == 1)
-		                    {
-		                        // View only
-		                        digits[4 + dp_index] = 1;
-		                    }
-		                    else if (ct_se_state == 2)
-		                    {
-		                        // Edit digits with blink
-		                        if (now - ct_se_blinkTimer >= 400) {
-		                            ct_se_blinkTimer = now;
-		                            ct_se_blinkState = !ct_se_blinkState;
-		                        }
+					if (ct_se_state == 1) {
+						// View only
+						digits[4 + dp_index] = 1;
+					} else if (ct_se_state == 2) {
+						// Edit digits with blink
+						if (now - ct_se_blinkTimer >= 400) {
+							ct_se_blinkTimer = now;
+							ct_se_blinkState = !ct_se_blinkState;
+						}
 
-		                        digits[4 + dp_index] = 1;  // decimal steady
+						digits[4 + dp_index] = 1;  // decimal steady
 
-		                        if (ct_se_blinkState) {
-		                            digits[ct_se_editing_digit] = 37;
-		                            HAL_Delay(100);
-		                        }
-		                    }
-		                    else if (ct_se_state == 3)
-		                    {
-		                        // Edit decimal position, blink DP
-		                        if (now - ct_se_blinkTimer >= 400) {
-		                            ct_se_blinkTimer = now;
-		                            ct_se_blinkState = !ct_se_blinkState;
-		                        }
+						if (ct_se_blinkState) {
+							digits[ct_se_editing_digit] = 37;
+							HAL_Delay(100);
+						}
+					} else if (ct_se_state == 3) {
+						// Edit decimal position, blink DP
+						if (now - ct_se_blinkTimer >= 400) {
+							ct_se_blinkTimer = now;
+							ct_se_blinkState = !ct_se_blinkState;
+						}
 
-		                        if (ct_se_blinkState) {
-		                            digits[4 + dp_index] = 0;
-		                        } else {
-		                            digits[4 + dp_index] = 1;
-		                        }
-		                    }
-		                }
-		            }
-		                break;
+						if (ct_se_blinkState) {
+							digits[4 + dp_index] = 0;
+						} else {
+							digits[4 + dp_index] = 1;
+						}
+					}
+				}
+			}
+				break;
 
-		            // ---------- MODE 3: SAVE y/n ----------
-		            case 3:
-		                // "SAV"
-		                digits[0] = 28;  // S
-		                digits[1] = 10;  // A
-		                digits[2] = 30;  // V
+				// ---------- MODE 3: SAVE y/n ----------
+			case 3:
+				// "SAV"
+				digits[0] = 28;  // S
+				digits[1] = 10;  // A
+				digits[2] = 30;  // V
 
-		                // No decimals
-		                digits[4] = 0;
-		                digits[5] = 0;
-		                digits[6] = 1;
-		                digits[7] = 0;
+				// No decimals
+				digits[4] = 0;
+				digits[5] = 0;
+				digits[6] = 1;
+				digits[7] = 0;
 
-		                if (now - blinkTimer >= 300) {
-		                    blinkTimer = now;
-		                    blinkState = !blinkState;
-		                }
+				if (now - blinkTimer >= 300) {
+					blinkTimer = now;
+					blinkState = !blinkState;
+				}
 
-		                if (blinkState) {
-		                    digits[3] = 37;  // blank
-		                } else {
-		                    digits[3] = (saveChoice == 0) ? 34 : 23;   // Y / n
+				if (blinkState) {
+					digits[3] = 37;  // blank
+				} else {
+					digits[3] = (saveChoice == 0) ? 34 : 23;   // Y / n
 
-		                }
-		                break;
-		            }
+				}
+				break;
+			}
 
-		            // ------------------- 2) Button handling (B1 / B2) ------------------- //
-		            if (now - lastPress > 200)   // simple debounce
-		            {
-		                // BUTTON 1: "enter / edit / confirm"
-		                if (b1 == GPIO_PIN_RESET) {
-		                    lastPress = now;
+			// ------------------- 2) Button handling (B1 / B2) ------------------- //
+			if (now - lastPress > 200)   // simple debounce
+					{
+				// BUTTON 1: "enter / edit / confirm"
+				if (b1 == GPIO_PIN_RESET) {
+					lastPress = now;
 
-		                    // ----- MODE 0: Conn -----
-		                    if (mode == 0) {
-		                        if (connState == 0) {
-		                            connState = 1;      // show current type
-		                        } else if (connState == 1) {
-		                            connState = 2;      // start editing (blink)
-		                            blinkState = 0;
-		                            blinkTimer = now;
-		                        } else { // connState == 2
-		                            connState = 0;      // finish editing
-		                        }
-		                    }
+					// ----- MODE 0: Conn -----
+					if (mode == 0) {
+						if (connState == 0) {
+							connState = 1;      // show current type
+						} else if (connState == 1) {
+							connState = 2;      // start editing (blink)
+							blinkState = 0;
+							blinkTimer = now;
+						} else { // connState == 2
+							connState = 0; // finish editing
+						}
+					}
 
-		                    // ----- MODE 1: ct.pr -----
-		                    else if (mode == 1)
-		                    {
-		                        if (ct_pr_state == 0) {
-		                            // Label -> numeric view
-		                            ct_pr_state = 1;
-		                            digits[5] = 0;
-		                        }
-		                        else if (ct_pr_state == 1) {
-		                            // View -> edit digit 0
-		                            ct_pr_state         = 2;
-		                            ct_pr_editing_digit = 0;
-		                            ct_pr_blinkState    = 0;
-		                            ct_pr_blinkTimer    = now;
-		                        }
-		                        else if (ct_pr_state == 2) {
-		                            // Next digit or decimal edit
-		                            if (ct_pr_editing_digit < 3) {
-		                                ct_pr_editing_digit++;
-		                                ct_pr_blinkState = 0;
-		                                ct_pr_blinkTimer = now;
-		                            } else {
-		                                ct_pr_state      = 3;  // go to decimal edit
-		                                ct_pr_blinkState = 0;
+					// ----- MODE 1: ct.pr -----
+					else if (mode == 1) {
+						if (ct_pr_state == 0) {
+							// Label -> numeric view
+							ct_pr_state = 1;
+							digits[5] = 0;
+						} else if (ct_pr_state == 1) {
+							// View -> edit digit 0
+							ct_pr_state = 2;
+							ct_pr_editing_digit = 0;
+							ct_pr_blinkState = 0;
+							ct_pr_blinkTimer = now;
+						} else if (ct_pr_state == 2) {
+							// Next digit or decimal edit
+							if (ct_pr_editing_digit < 3) {
+								ct_pr_editing_digit++;
+								ct_pr_blinkState = 0;
+								ct_pr_blinkTimer = now;
+							} else {
+								ct_pr_state = 3;  // go to decimal edit
+								ct_pr_blinkState = 0;
 
-		                                ct_pr_blinkTimer = now;
-		                            }
-		                        }
-		                        else if (ct_pr_state == 3) {
-		                            // Finish edit, compute value, go back to label
-		                            ct_pr_value = CT_Pr_DigitsToValue();
-		                            ct_pr_state = 0;
+								ct_pr_blinkTimer = now;
+							}
+						} else if (ct_pr_state == 3) {
+							// Finish edit, compute value, go back to label
+							ct_pr_value = CT_Pr_DigitsToValue();
+							ct_pr_state = 0;
 
-		                        }
-		                    }
+						}
+					}
 
-		                    // ----- MODE 2: ct.se -----
-		                    else if (mode == 2)
-		                    {
-		                        if (ct_se_state == 0) {
-		                            // Label -> numeric view
-		                        	 digits[5] = 0;
-		                            ct_se_state = 1;
-		                        }
-		                        else if (ct_se_state == 1) {
-		                            // View -> edit digit 0
-		                            ct_se_state         = 2;
-		                            ct_se_editing_digit = 0;
-		                            ct_se_blinkState    = 0;
-		                            ct_se_blinkTimer    = now;
-		                        }
-		                        else if (ct_se_state == 2) {
-		                            if (ct_se_editing_digit < 3) {
-		                                ct_se_editing_digit++;
-		                                ct_se_blinkState = 0;
-		                                ct_se_blinkTimer = now;
-		                            } else {
-		                                ct_se_state      = 3;  // decimal edit
-		                                ct_se_blinkState = 0;
-		                                ct_se_blinkTimer = now;
-		                            }
-		                        }
-		                        else if (ct_se_state == 3) {
-		                            // Finish edit
-		                            ct_se_value = CT_Se_DigitsToValue();
-		                            ct_se_state = 0;
-		                        }
-		                    }
+					// ----- MODE 2: ct.se -----
+					else if (mode == 2) {
+						if (ct_se_state == 0) {
+							// Label -> numeric view
+							digits[5] = 0;
+							ct_se_state = 1;
+						} else if (ct_se_state == 1) {
+							// View -> edit digit 0
+							ct_se_state = 2;
+							ct_se_editing_digit = 0;
+							ct_se_blinkState = 0;
+							ct_se_blinkTimer = now;
+						} else if (ct_se_state == 2) {
+							if (ct_se_editing_digit < 3) {
+								ct_se_editing_digit++;
+								ct_se_blinkState = 0;
+								ct_se_blinkTimer = now;
+							} else {
+								ct_se_state = 3;  // decimal edit
+								ct_se_blinkState = 0;
+								ct_se_blinkTimer = now;
+							}
+						} else if (ct_se_state == 3) {
+							// Finish edit
+							ct_se_value = CT_Se_DigitsToValue();
+							ct_se_state = 0;
+						}
+					}
 
-		                    // ----- MODE 3: SAVE -----
-		                    else if (mode == 3) {
-		                        if (saveChoice == 0) {
-		                            // YES → exit programming
-		                            programming     = 0;
-		                            inPasswordMode  = 0;
-		                            modeEntryActive = 0;
-		                            connState       = 0;
-		                            mode            = 0;
-		                            // Clear main digits
-		                            digits[0] = digits[1] = digits[2] = digits[3] = 0;
-		                            digits[5] = digits[6] = digits[7] = 0;
-		                            digits[4] = 1;
-		                        } else {
-		                            // NO → back to Conn
-		                            mode      = 0;
-		                            connState = 0;
-		                            digits[6] = 0;
-		                        }
-		                    }
-		                }
+					// ----- MODE 3: SAVE -----
+					else if (mode == 3) {
+						if (saveChoice == 0) {
+							// YES → exit programming
+							programming = 0;
+							inPasswordMode = 0;
+							modeEntryActive = 0;
+							connState = 0;
+							mode = 0;
+							// Clear main digits
+							digits[0] = digits[1] = digits[2] = digits[3] = 0;
+							digits[5] = digits[6] = digits[7] = 0;
+							digits[4] = 1;
+						} else {
+							// NO → back to Conn
+							mode = 0;
+							connState = 0;
+							digits[6] = 0;
+						}
+					}
+				}
 
-		                // BUTTON 2: "next / increment / toggle"
-		                else if (b2 == GPIO_PIN_RESET) {
-		                    lastPress = now;
+				// BUTTON 2: "next / increment / toggle"
+				else if (b2 == GPIO_PIN_RESET) {
+					lastPress = now;
 
-		                    // ----- MODE 0: Conn -----
-		                    if (mode == 0) {
-		                        if (connState == 2) {
-		                            connType = (connType + 1) % 3;
-		                        } else if (connState == 0) {
-		                            mode        = 1;   // go to ct.pr
-		                            ct_pr_state = 0;
-		                        }
-		                    }
+					// ----- MODE 0: Conn -----
+					if (mode == 0) {
+						if (connState == 2) {
+							connType = (connType + 1) % 3;
+						} else if (connState == 0) {
+							mode = 1;   // go to ct.pr
+							ct_pr_state = 0;
+						}
+					}
 
-		                    // ----- MODE 1: ct.pr -----
-		                    else if (mode == 1)
-		                    {
-		                        if (ct_pr_state == 0) {
-		                            // Label: B2 -> next menu (ct.se)
-		                            mode        = 2;
-		                            ct_se_state = 0;
-		                        }
-		                        else if (ct_pr_state == 1) {
-		                            // View only: B2 no-op (optional)
-		                        }
-		                        else if (ct_pr_state == 2) {
-		                            // Increment current digit
-		                            uint8_t *pd = &ct_pr_digits[ct_pr_editing_digit];
-		                            (*pd)++;
-		                            if (*pd > 9) *pd = 0;
-		                        }
-		                        else if (ct_pr_state == 3) {
-		                            // Cycle decimal position 0..3
-		                            digits[4] = 0;
-		                            digits[5] = 0;
-		                            digits[6] = 0;
-		                            digits[7] = 0;
-		                            ct_pr_decimal_pos++;
-		                            if (ct_pr_decimal_pos > 3)
-		                                ct_pr_decimal_pos = 0;
-		                        }
-		                    }
+					// ----- MODE 1: ct.pr -----
+					else if (mode == 1) {
+						if (ct_pr_state == 0) {
+							// Label: B2 -> next menu (ct.se)
+							mode = 2;
+							ct_se_state = 0;
+						} else if (ct_pr_state == 1) {
+							// View only: B2 no-op (optional)
+						} else if (ct_pr_state == 2) {
+							// Increment current digit
+							uint8_t *pd = &ct_pr_digits[ct_pr_editing_digit];
+							(*pd)++;
+							if (*pd > 9)
+								*pd = 0;
+						} else if (ct_pr_state == 3) {
+							// Cycle decimal position 0..3
+							digits[4] = 0;
+							digits[5] = 0;
+							digits[6] = 0;
+							digits[7] = 0;
+							ct_pr_decimal_pos++;
+							if (ct_pr_decimal_pos > 3)
+								ct_pr_decimal_pos = 0;
+						}
+					}
 
-		                    // ----- MODE 2: ct.se -----
-		                    else if (mode == 2)
-		                    {
-		                        if (ct_se_state == 0) {
-		                            // Label: B2 -> SAVE menu
-		                            mode       = 3;
-		                            saveChoice = 0;
-		                            blinkState = 0;
-		                            blinkTimer = now;
-		                        }
-		                        else if (ct_se_state == 1) {
-		                            // View only: no-op
-		                        }
-		                        else if (ct_se_state == 2) {
-		                            // Increment digit
-		                            uint8_t *pd = &ct_se_digits[ct_se_editing_digit];
-		                            (*pd)++;
-		                            if (*pd > 9) *pd = 0;
-		                        }
-		                        else if (ct_se_state == 3) {
-		                            // Cycle decimal position
+					// ----- MODE 2: ct.se -----
+					else if (mode == 2) {
+						if (ct_se_state == 0) {
+							// Label: B2 -> SAVE menu
+							mode = 3;
+							saveChoice = 0;
+							blinkState = 0;
+							blinkTimer = now;
+						} else if (ct_se_state == 1) {
+							// View only: no-op
+						} else if (ct_se_state == 2) {
+							// Increment digit
+							uint8_t *pd = &ct_se_digits[ct_se_editing_digit];
+							(*pd)++;
+							if (*pd > 9)
+								*pd = 0;
+						} else if (ct_se_state == 3) {
+							// Cycle decimal position
 
-		                            digits[4] = 0;
-		                     		digits[5] = 0;
-		                     		digits[6] = 0;
-		                     		digits[7] = 0;
-		                            ct_se_decimal_pos++;
-		                            if (ct_se_decimal_pos > 3)
-		                                ct_se_decimal_pos = 0;
-		                        }
-		                    }
+							digits[4] = 0;
+							digits[5] = 0;
+							digits[6] = 0;
+							digits[7] = 0;
+							ct_se_decimal_pos++;
+							if (ct_se_decimal_pos > 3)
+								ct_se_decimal_pos = 0;
+						}
+					}
 
-		                    // ----- MODE 3: SAVE -----
-		                    else if (mode == 3) {
-		                        // Toggle Y/N
-		                        saveChoice ^= 1;
-		                    }
-		                }
-		            }
-		        }
-
-
+					// ----- MODE 3: SAVE -----
+					else if (mode == 3) {
+						// Toggle Y/N
+						saveChoice ^= 1;
+					}
+				}
+			}
+		}
 
 	}
 

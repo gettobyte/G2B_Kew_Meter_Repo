@@ -41,7 +41,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-const uint8_t Segment_Patterns[38] = { 0b10000001,  // 0   [0]
+const uint8_t Segment_Patterns[50] = {
+		0b10000001,  // 0   [0]
 		0b11001111,  // 1   [1]
 		0b10010010,  // 2   [2]
 		0b10000110,  // 3   [3]
@@ -79,9 +80,19 @@ const uint8_t Segment_Patterns[38] = { 0b10000001,  // 0   [0]
 		0b11000100,  // Y   [34] (like 4)
 		0b10010010,  // Z   [35] (like 2)
 
-		0b11111110,  // -   [36]
+		0b11111110,  // -     [36]
 		0b11111111,  // space [37]
-		0b11100010   // ?   [38]
+		0b11100010,   // ?    [38]
+		0b11100011,    //     [39]
+		0b11101111,    //Voltage [40]
+		0b01111111,    //Current [41]
+		0b11111011,    //Vpeak [42]
+		0b11110111,    //Ipeak [43]
+		0b01101111,    //UPPER RIGHT [44]
+		0b01111011,    //LOWER RIGHT [45]
+		0b11110011,    //LOWER LEFT  [46]
+		0b11100111,    //UPPER LEFT  [47]
+		0b11111111,
 		};
 
 unsigned char seg = 0;
@@ -232,12 +243,14 @@ void TIM3_IRQHandler(void)
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4,
 			(pattern & 0x08) ? GPIO_PIN_SET : GPIO_PIN_RESET); // D
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5,
-			(pattern & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET); //E
+			(pattern & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET); // E
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9,
 			(pattern & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET); // F
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12,
 			(pattern & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET); // G
 
+
+	// dp handling //
 	if (seg < 4) {
 		if (digits[4 + seg]) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
@@ -245,33 +258,11 @@ void TIM3_IRQHandler(void)
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
 		}
 	}
-
-	if (seg == 4) {
-	    // 1) Clear all 4 LEDs first (common anode → SET = OFF)
-	    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET); // C
-	    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);  // D
-	    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);  // E
-	    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);  // DP
-
-	    // 2) Turn ON exactly one LED, based on digits[8]
-	    switch (digits[8]) {
-	    case 10: // first LED -> C
-	        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
-	        break;
-	    case 11: // second LED -> D
-	        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-	        break;
-	    case 12: // third LED -> E
-	        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-	        break;
-	    case 13: // fourth LED -> DP
-	        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
-	        break;
-	    default:
-	        // 0 or anything else -> all OFF (already cleared above)
-	        break;
-	    }
+	if (seg == 8){
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3,
+				(pattern & 0x80) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 	}
+
 
 	switch (seg) {
 	//This turns ON digits
@@ -287,14 +278,14 @@ void TIM3_IRQHandler(void)
 	case 3:
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
 		break;
-	case 4:
+	case 8:
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
 		break;
 
 	}
-//
+
 //	// === Advance to next digit ===
-	seg = (seg + 1) % 5;
+	seg = (seg + 1) % 9;
 //	  HAL_Delay(10);
 
   /* USER CODE END TIM3_IRQn 0 */
