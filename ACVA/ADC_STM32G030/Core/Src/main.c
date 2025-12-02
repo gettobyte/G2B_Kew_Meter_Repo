@@ -22,9 +22,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "math.h"
 #include "string.h"
 #include "stdbool.h"
-#include "math.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +66,8 @@ uint16_t digits[9];
 #define ADC_NUM_CHANNELS         3U
 #define ADC_DMA_COUNT            (SAMPLES_PER_CYCLE * ADC_NUM_CHANNELS)   // 1024 halfwords
 
-uint8_t flag = 0;
+volatile uint8_t flag = 0;
+
 static uint16_t adc_buffer[ADC_DMA_COUNT];
 //static uint16_t adc_buffer[3];
 volatile uint8_t buffer_ready = 0;
@@ -73,12 +75,10 @@ volatile uint8_t buffer_ready = 0;
 uint16_t adc_vrefint = 0;   // latest ADC result for VREFINT
 uint16_t vdda_mV = 0;       // calculated VDDA (mV)
 
-//uint16_t AD_RES_BUFFER[ADC_DMA_COUNT];
-
 float voltage = 0.0f;
 float current = 0.0f;
 
-uint16_t v_buf[ADC_HISTORY_LEN];  // stores last 100 samples
+uint16_t v_buf[ADC_HISTORY_LEN];  // stores last 512 samples
 uint16_t i_buf[ADC_HISTORY_LEN];
 uint16_t buf_index = 0;                 // buffer index
 
@@ -89,6 +89,9 @@ float Irms_total = 0.0;
 float Irms_AC = 0.0f;
 float Vavg = 0.0;
 float Iavg = 0.0;
+
+float rms_AC = 0.0f;
+float rms_filtered = 0.0f;
 
 uint32_t buttonPressStartTime = 0;
 uint8_t waitingFor2Sec = 0;
@@ -104,7 +107,7 @@ uint32_t lastPress = 0, blinkTimer = 0;
 uint8_t blinkState = 0;
 uint8_t modeEntryActive = 0;
 
-int programming = 0;
+uint8_t programming = 0;
 
 uint8_t readOnlyMode = 0;
 
@@ -132,16 +135,10 @@ uint8_t dp_index;
 volatile int dbg_nv = -1, dbg_ni = -1;
 volatile float dbg_dt = 0.0f, dbg_phi = 0.0f;
 
-float Power_Factor = 0.0;
+static float Power_Factor = 0.0;
 
 static float Vrms_filtered = 0;
 static float Irms_filtered = 0;
-
-const float alpha_i = 0.1f;  // slower, steadier EMA
-float threshold_i = 0.5f;
-
-const float alpha_v = 0.1f;  // slower, steadier EMA
-float threshold_v = 0.5f;
 
 float ct_pr_value = 1.0f;
 float ct_se_value = 1.0f;
@@ -293,224 +290,376 @@ static float CT_Se_DigitsToValue(void) {
 	return (float) raw / scale;
 }
 
-void Calculate_Vrms() {
+float digits_to_float(const uint8_t *digits, uint8_t len, uint8_t decimal_pos) {
+	uint32_t integer = 0;
 
-	float sum = 0.0f;
-	float sum_sq = 0.0f;
-
-	// Step 1: Compute mean (DC offset) in volts
-	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		sum += v_buf[i];
+	// 1) Build the integer value from the digit array
+	for (uint8_t i = 0; i < len; i++) {
+		integer = integer * 10u + (uint32_t) digits[i];
 	}
 
-	Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
-
-	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		sum_sq += (v_buf[i] - Vavg) * (v_buf[i] - Vavg); // accumulate squared values
+	// 2) How many digits are after the decimal?
+	if (decimal_pos >= len) {
+		// Invalid position, treat as no decimal
+		return (float) integer;
 	}
 
-	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
+	uint8_t frac_digits = (uint8_t) (len - decimal_pos - 1);
 
-	// Step 2: Compute RMS values
-
-	Vrms_total = sqrtf(mean_sq);
-
-	const float K_VRMS = 0.2512f;
-	Vrms_total *= K_VRMS;
-
-//		Vrms_total = Vrms_total * 1.03;
-
-	if (fabsf(Vrms_total - Vrms_AC) >= threshold_v) {
-		Vrms_AC = Vrms_total;
+	// 3) Scale down by 10^(frac_digits)
+	float value = (float) integer;
+	while (frac_digits--) {
+		value /= 10.0f;
 	}
 
-	Vrms_filtered = (alpha_v * Vrms_AC) + ((1.0f - alpha_v) * Vrms_filtered);
-
-	static float ema_voltage = 0.0f;
-	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
-
-	ema_voltage = ema_voltage + EMA_ALPHA * (Vrms_filtered - ema_voltage);
-
-	/* --- Stable display logic with hysteresis --- */
-	static float last_display_voltage = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
-	float display_voltage = 0;
-
-	int val_int;
-
-	if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD) {
-		last_display_voltage = ema_voltage;
-	}
-
-	display_voltage = last_display_voltage;
-
-	// After computing display_voltage
-	if (fabsf(display_voltage) <= 0.3f)   // anything below 50 mV = 0.00
-		display_voltage = 0.0f;
-
-	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
-	if (display_voltage > 200.0f)
-		display_voltage = 200.0f;
-	if (display_voltage < 0.0f)
-		display_voltage = 0.0f;
-
-	/* ---------- Clear digits & DPs ---------- */
-	for (int i = 0; i < 4; i++) {
-		digits[i] = 0;
-		digits[8 + i] = 0;
-	}
-
-	/* ---------- Extract digits + Set DP ---------- */
-	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
-	if (display_voltage < 10.0f) {
-		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
-		val_int = (int) (display_voltage * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
-
-		digits[0] = (val_int / 100) % 10;  // integer part
-		digits[1] = (val_int / 10) % 10;   // first decimal
-		digits[2] = val_int % 10;          // second decimal
-		digits[3] = 0;              // optional: fill with fake digit if desired
-
-		digits[4] = 1;  // DP after first digit (X.XX)
-		digits[5] = 0;
-		digits[6] = 0;
-	} else if (display_voltage < 100.0f) {
-		// Format: XX.XX (tens, ones, two decimals)
-		val_int = (int) (display_voltage * 100 + 0.5f);  // e.g. 23.45 -> 2345
-
-		digits[0] = (val_int / 1000) % 10; // tens
-		digits[1] = (val_int / 100) % 10;  // ones
-		digits[2] = (val_int / 10) % 10;   // first decimal
-		digits[3] = val_int % 10;         // second decimal
-
-		digits[5] = 1;  // DP after second digit (XX.XX)
-		digits[4] = 0;
-		digits[6] = 0;
-	} else {
-		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
-		val_int = (int) (display_voltage * 10 + 0.5f);  // e.g. 123.4 -> 1234
-
-		digits[0] = (val_int / 1000) % 10; // hundreds
-		digits[1] = (val_int / 100) % 10;  // tens
-		digits[2] = (val_int / 10) % 10;   // ones
-		digits[3] = val_int % 10;         // first decimal
-
-		digits[6] = 1;  // DP after third digit (XXX.X)
-		digits[4] = 0;
-		digits[5] = 0;
-	}
-
+	return value;
 }
 
-void Calculate_Irms() {
+//void Calculate_Vrms() {
+//
+//	float sum = 0.0f;
+//	float sum_sq = 0.0f;
+//
+//	const float alpha_v = 0.1f;  // slower, steadier EMA
+//	float threshold_v = 0.5f;
+//
+//	// Step 1: Compute mean (DC offset) in volts
+//	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+//
+//		sum += v_buf[i];
+//	}
+//
+//	Vavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
+//
+//	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+//
+//		sum_sq += (v_buf[i] - Vavg) * (v_buf[i] - Vavg); // accumulate squared values
+//	}
+//
+//	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
+//
+//	// Step 2: Compute RMS values
+//
+//	Vrms_total = sqrtf(mean_sq);
+//
+//	const float K_VRMS = 0.2512f;
+//	Vrms_total *= K_VRMS;
+//
+////		Vrms_total = Vrms_total * 1.03;
+//
+//	if (fabsf(Vrms_total - Vrms_AC) >= threshold_v) {
+//		Vrms_AC = Vrms_total;
+//	}
+//
+//	Vrms_filtered = (alpha_v * Vrms_AC) + ((1.0f - alpha_v) * Vrms_filtered);
+//
+//	static float ema_voltage = 0.0f;
+//	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+//
+//	ema_voltage = ema_voltage + EMA_ALPHA * (Vrms_filtered - ema_voltage);
+//
+//	/* --- Stable display logic with hysteresis --- */
+//	static float last_display_voltage = 0.0f;
+//	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+//	float display_voltage = 0;
+//
+//	int val_int;
+//
+//	if (fabsf(ema_voltage - last_display_voltage) >= DISPLAY_THRESHOLD) {
+//		last_display_voltage = ema_voltage;
+//	}
+//
+//	display_voltage = last_display_voltage;
+//
+//	// After computing display_voltage
+//	if (fabsf(display_voltage) <= 0.3f)   // anything below 50 mV = 0.00
+//		display_voltage = 0.0f;
+//
+//	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
+//	if (display_voltage > 200.0f)
+//		display_voltage = 200.0f;
+//	if (display_voltage < 0.0f)
+//		display_voltage = 0.0f;
+//
+//	/* ---------- Clear digits & DPs ---------- */
+//	for (int i = 0; i < 4; i++) {
+//		digits[i] = 0;
+//		digits[8 + i] = 0;
+//	}
+//
+//	/* ---------- Extract digits + Set DP ---------- */
+//	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
+//	if (display_voltage < 10.0f) {
+//		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+//		val_int = (int) (display_voltage * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+//
+//		digits[0] = (val_int / 100) % 10;  // integer part
+//		digits[1] = (val_int / 10) % 10;   // first decimal
+//		digits[2] = val_int % 10;          // second decimal
+//		digits[3] = 0;              // optional: fill with fake digit if desired
+//
+//		digits[4] = 1;  // DP after first digit (X.XX)
+//		digits[5] = 0;
+//		digits[6] = 0;
+//	} else if (display_voltage < 100.0f) {
+//		// Format: XX.XX (tens, ones, two decimals)
+//		val_int = (int) (display_voltage * 100 + 0.5f);  // e.g. 23.45 -> 2345
+//
+//		digits[0] = (val_int / 1000) % 10; // tens
+//		digits[1] = (val_int / 100) % 10;  // ones
+//		digits[2] = (val_int / 10) % 10;   // first decimal
+//		digits[3] = val_int % 10;         // second decimal
+//
+//		digits[5] = 1;  // DP after second digit (XX.XX)
+//		digits[4] = 0;
+//		digits[6] = 0;
+//	} else {
+//		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+//		val_int = (int) (display_voltage * 10 + 0.5f);  // e.g. 123.4 -> 1234
+//
+//		digits[0] = (val_int / 1000) % 10; // hundreds
+//		digits[1] = (val_int / 100) % 10;  // tens
+//		digits[2] = (val_int / 10) % 10;   // ones
+//		digits[3] = val_int % 10;         // first decimal
+//
+//		digits[6] = 1;  // DP after third digit (XXX.X)
+//		digits[4] = 0;
+//		digits[5] = 0;
+//	}
+//
+//}
+
+//void Calculate_Irms() {
+//
+//	float sum = 0.0f;
+//	float sum_sq = 0.0f;
+//	const float alpha_i = 0.1f;  // slower, steadier EMA
+//	float threshold_i = 0.5f;
+//
+//	// Step 1: Compute mean (DC offset) in volts
+//	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+//
+//		sum += i_buf[i];
+//	}
+//
+//	Iavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
+//
+//	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
+//
+//		sum_sq += (i_buf[i] - Iavg) * (i_buf[i] - Iavg); // accumulate squared values
+//	}
+//
+//	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
+//
+//	// Step 2: Compute RMS values
+//
+//	Irms_total = sqrtf(mean_sq);
+//
+//	const float K_IRMS = 4.56f;   // or 4.6f as a nice round value
+//	Irms_total *= K_IRMS;
+//
+//	if (fabsf(Irms_total - Irms_AC) >= threshold_i) {
+//		Irms_AC = Irms_total;
+//	}
+//
+//	Irms_filtered = (alpha_i * Irms_AC) + ((1.0f - alpha_i) * Irms_filtered);
+//
+//	static float ema_current = 0.0f;
+//	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+//
+//	ema_current = ema_current + EMA_ALPHA * (Irms_filtered - ema_current);
+//
+//	/* --- Stable display logic with hysteresis --- */
+//	static float last_display_current = 0.0f;
+//	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+//	float display_current = 0;
+//
+//	int val_int;
+//
+//	if (fabsf(ema_current - last_display_current) >= DISPLAY_THRESHOLD) {
+//		last_display_current = ema_current;
+//	}
+//
+//	display_current = last_display_current;
+//
+//
+//	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
+//		display_current = 0.0f;
+//
+//	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
+//	if (display_current > 200.0f)
+//		display_current = 200.0f;
+//	if (display_current < 0.0f)
+//		display_current = 0.0f;
+//
+//	/* ---------- Clear digits & DPs ---------- */
+//	for (int i = 0; i < 9; i++) {
+//		digits[i] = 0;
+//
+//	}
+//
+//	/* ---------- Extract digits + Set DP ---------- */
+//	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
+//	if (display_current < 10.0f) {
+//		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
+//		val_int = (int) (display_current * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
+//
+//		digits[0] = (val_int / 100) % 10;  // integer part
+//		digits[1] = (val_int / 10) % 10;   // first decimal
+//		digits[2] = val_int % 10;          // second decimal
+//		digits[3] = 0;              // optional: fill with fake digit if desired
+//
+//		digits[4] = 1;  // DP after first digit (X.XX)
+//		digits[5] = 0;
+//		digits[6] = 0;
+//	} else if (display_current < 100.0f) {
+//		// Format: XX.XX (tens, ones, two decimals)
+//		val_int = (int) (display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
+//
+//		digits[0] = (val_int / 1000) % 10; // tens
+//		digits[1] = (val_int / 100) % 10;  // ones
+//		digits[2] = (val_int / 10) % 10;   // first decimal
+//		digits[3] = val_int % 10;         // second decimal
+//
+//		digits[5] = 1;  // DP after second digit (XX.XX)
+//		digits[4] = 0;
+//		digits[6] = 0;
+//	} else {
+//		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
+//		val_int = (int) (display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
+//
+//		digits[0] = (val_int / 1000) % 10; // hundreds
+//		digits[1] = (val_int / 100) % 10;  // tens
+//		digits[2] = (val_int / 10) % 10;   // ones
+//		digits[3] = val_int % 10;         // first decimal
+//
+//		digits[6] = 1;  // DP after third digit (XXX.X)
+//		digits[4] = 0;
+//		digits[5] = 0;
+//	}
+//
+//}
+
+static void Calculate_Rms_Generic(const uint16_t *buf, float k_rms) {
+
+//	float ct_pr_value = digits_to_float(ct_pr_digits, 4, ct_pr_decimal_pos);
+//	float ct_se_value = digits_to_float(ct_se_digits, 4, ct_se_decimal_pos);
+
+	float ct_pr_value = 5.0f;
+	float ct_se_value = 100.0f;
 
 	float sum = 0.0f;
 	float sum_sq = 0.0f;
 
-	// Step 1: Compute mean (DC offset) in volts
-	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		sum += i_buf[i];
+	// 1) Average (DC component)
+	for (uint16_t i = 0; i < ADC_HISTORY_LEN; i++) {
+		sum += buf[i];
 	}
 
-	Iavg = sum / ADC_HISTORY_LEN;     // DC offset (avg)
-
-	for (int i = 0; i < ADC_HISTORY_LEN; i++) {
-
-		sum_sq += (i_buf[i] - Iavg) * (i_buf[i] - Iavg); // accumulate squared values
+	// Store average in global (Vavg or Iavg)
+	float avg;
+	if (buf == v_buf) {
+		avg = Vavg = sum / ADC_HISTORY_LEN;
+	} else {
+		avg = Iavg = sum / ADC_HISTORY_LEN;
 	}
 
-	float mean_sq = sum_sq / ADC_HISTORY_LEN; // <v^2>
-
-	// Step 2: Compute RMS values
-
-	Irms_total = sqrtf(mean_sq);
-
-	const float K_IRMS = 4.56f;   // or 4.6f as a nice round value
-	Irms_total *= K_IRMS;
-
-	if (fabsf(Irms_total - Irms_AC) >= threshold_i) {
-		Irms_AC = Irms_total;
+	// 2) Variance
+	for (uint16_t i = 0; i < ADC_HISTORY_LEN; i++) {  // Fixed: was 'len'
+		float diff = (float) buf[i] - avg;
+		sum_sq += diff * diff;
 	}
 
-	Irms_filtered = (alpha_i * Irms_AC) + ((1.0f - alpha_i) * Irms_filtered);
+ 	float mean_sq = sum_sq / ADC_HISTORY_LEN;
 
-	static float ema_current = 0.0f;
-	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+	// 3) RMS before scaling
+	float rms_total = sqrtf(mean_sq) * k_rms;  // Fixed: was rms_raw
 
-	ema_current = ema_current + EMA_ALPHA * (Irms_filtered - ema_current);
+	// 4) Hysteresis + EMA (using your existing globals)
+	const float threshold = 0.05f;
+	if (buf == v_buf) {
+		if (fabsf(rms_total - Vrms_AC) >= threshold) { // Fixed: rms_AC -> Vrms_AC
+			Vrms_AC = rms_total;
+		}
+		const float alpha_v = 0.1f;
+		Vrms_filtered = alpha_v * Vrms_AC + (1.0f - alpha_v) * Vrms_filtered; // Fixed: rms_*
+		//Vrms_total = rms_total;  // Fixed: rms_raw -> rms_total
+	} else {
+		if (fabsf(rms_total - Irms_AC) >= threshold) { // Fixed: rms_raw -> rms_total
+			Irms_AC = rms_total;
+		}
+		const float alpha_i = 0.1f;
+		Irms_filtered = alpha_i * Irms_AC + (1.0f - alpha_i) * Irms_filtered; // Fixed: rms_*
+		Irms_filtered = (Irms_filtered / 100)  ;
 
-	/* --- Stable display logic with hysteresis --- */
-	static float last_display_current = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
-	float display_current = 0;
-
-	int val_int;
-
-	if (fabsf(ema_current - last_display_current) >= DISPLAY_THRESHOLD) {
-		last_display_current = ema_current;
+		// Irms_total = rms_total;
 	}
 
-	display_current = last_display_current;
+	// 5) Display EMA + hysteresis (separate for V and I)
+	static float ema_val[2] = { 0.0f, 0.0f };  // 0=voltage, 1=current
+	static float last_display[2] = { 0.0f, 0.0f };
+	const float EMA_ALPHA = 0.05f;
+	const float DISPLAY_THRESHOLD = 0.05f;
 
-	// After computing display_voltage
-	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
-		display_current = 0.0f;
+	uint8_t is_voltage = (buf == v_buf);
+	rms_filtered = is_voltage ? Vrms_filtered : Irms_filtered;
 
-	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
-	if (display_current > 200.0f)
-		display_current = 200.0f;
-	if (display_current < 0.0f)
-		display_current = 0.0f;
+	ema_val[is_voltage] = ema_val[is_voltage]
+			+ EMA_ALPHA * (rms_filtered - ema_val[is_voltage]);
 
-	/* ---------- Clear digits & DPs ---------- */
+	float display_val = ema_val[is_voltage];
+	if (fabsf(display_val - last_display[is_voltage]) >= DISPLAY_THRESHOLD) {
+		last_display[is_voltage] = display_val;
+
+	}
+	display_val = last_display[is_voltage];
+
+	// 6) Clamp and zero small values
+	if (fabsf(display_val) <= 0.0005f)
+		display_val = 0.0f;
+	if (display_val > 200.0f)
+		display_val = 200.0f;
+	if (display_val < 0.0f)
+		display_val = 0.0f;
+
+	// 7) Clear digits
 	for (int i = 0; i < 9; i++) {
 		digits[i] = 0;
-
 	}
 
-	/* ---------- Extract digits + Set DP ---------- */
-	/* NOTE: Using display_voltage (ring-averaged) for all formatting */
-	if (display_current < 10.0f) {
-		// Format: X.XX (1 integer + 2 decimals). Keep last digit as the 3rd decimal if you want.
-		val_int = (int) (display_current * 100 + 0.5f); // e.g. 2.34 -> 234 (hundreds=tens etc.)
-
-		digits[0] = (val_int / 100) % 10;  // integer part
-		digits[1] = (val_int / 10) % 10;   // first decimal
-		digits[2] = val_int % 10;          // second decimal
-		digits[3] = 0;              // optional: fill with fake digit if desired
-
-		digits[4] = 1;  // DP after first digit (X.XX)
+	// 8) Format digits (your exact logic)
+	int val_int;
+	if (display_val < 10.0f) {
+		val_int = (int) (display_val * 100.0f + 0.5f);
+		digits[0] = (val_int / 100) % 10;
+		digits[1] = (val_int / 10) % 10;
+		digits[2] = val_int % 10;
+		digits[3] = 0;
+		digits[4] = 1;
 		digits[5] = 0;
 		digits[6] = 0;
-	} else if (display_current < 100.0f) {
-		// Format: XX.XX (tens, ones, two decimals)
-		val_int = (int) (display_current * 100 + 0.5f);  // e.g. 23.45 -> 2345
-
-		digits[0] = (val_int / 1000) % 10; // tens
-		digits[1] = (val_int / 100) % 10;  // ones
-		digits[2] = (val_int / 10) % 10;   // first decimal
-		digits[3] = val_int % 10;         // second decimal
-
-		digits[5] = 1;  // DP after second digit (XX.XX)
+	} else if (display_val < 100.0f) {
+		val_int = (int) (display_val * 100.0f + 0.5f);
+		digits[0] = (val_int / 1000) % 10;
+		digits[1] = (val_int / 100) % 10;
+		digits[2] = (val_int / 10) % 10;
+		digits[3] = val_int % 10;
+		digits[5] = 1;
 		digits[4] = 0;
 		digits[6] = 0;
 	} else {
-		// Format: XXX.X  (since you only have 4 digits, reduce decimals for 3-digit numbers)
-		val_int = (int) (display_current * 10 + 0.5f);  // e.g. 123.4 -> 1234
-
-		digits[0] = (val_int / 1000) % 10; // hundreds
-		digits[1] = (val_int / 100) % 10;  // tens
-		digits[2] = (val_int / 10) % 10;   // ones
-		digits[3] = val_int % 10;         // first decimal
-
-		digits[6] = 1;  // DP after third digit (XXX.X)
+		val_int = (int) (display_val * 10.0f + 0.5f);
+		digits[0] = (val_int / 1000) % 10;
+		digits[1] = (val_int / 100) % 10;
+		digits[2] = (val_int / 10) % 10;
+		digits[3] = val_int % 10;
+		digits[6] = 1;
 		digits[4] = 0;
 		digits[5] = 0;
 	}
 
+	// 9) Set symbol
+	digits[8] = is_voltage ? 40 : 42;  // V symbol or I symbol
 }
 
 /* USER CODE END 0 */
@@ -528,9 +677,9 @@ static void Compute_PF_FromBuffers(void) {
 	/* tune these to your scale (mV). Example: require ~10 V and ~0.5 V equiv. */
 	const float V_MIN_RMS = 10.0f;
 	const float I_MIN_RMS = 0.5f;
-	if (Vrms_total < V_MIN_RMS || Irms_total < I_MIN_RMS) {
-		return; // keep last Power_Factor
-	}
+//	if (Vrms_total < V_MIN_RMS || Irms_total < I_MIN_RMS) {
+//		return; // keep last Power_Factor
+//	}
 
 	/* --- 2) Covariance = mean( (v - Vavg)*(i - Iavg) ) --- */
 	float acc = 0.0;
@@ -591,33 +740,29 @@ static void Compute_PF_FromBuffers(void) {
 	last_out = out;
 	Power_Factor = out;
 
-	static float ema_current = 0.0f;
-	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
-
-	Power_Factor = Power_Factor + EMA_ALPHA * (Irms_filtered - ema_current);
+//	static float ema_current = 0.0f;
+//	const float EMA_ALPHA = 0.05f; // (0.01 = very stable, 0.2 = faster response) faster settling without looking jumpy
+//
+//	Power_Factor = Power_Factor + EMA_ALPHA * (rms_filtered - ema_current);
 
 	/* --- Stable display logic with hysteresis --- */
 	static float last_display_current = 0.0f;
-	const float DISPLAY_THRESHOLD = 0.1f;  // tighter update band (50 mV)
+	const float DISPLAY_THRESHOLD = 0.05f;  // tighter update band (50 mV)
 	float display_current = 0;
 
 	int val_int;
 
 	if (fabsf(Power_Factor - last_display_current) >= DISPLAY_THRESHOLD) {
-		last_display_current = ema_current;
+		last_display_current = Power_Factor;
 	}
 
 	display_current = last_display_current;
 
 	// After computing display_voltage
-	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
-		display_current = 0.0f;
+//	if (fabsf(display_current) <= 0.3f)   // anything below 50 mV = 0.00
+//		display_current = 0.0f;
 
 	/* ---------- clamp display_voltage (unchanged behavior) ---------- */
-	if (display_current > 200.0f)
-		display_current = 200.0f;
-	if (display_current < 0.0f)
-		display_current = 0.0f;
 
 	/* ---------- Clear digits & DPs ---------- */
 	for (int i = 0; i < 9; i++) {
@@ -651,6 +796,7 @@ int main(void) {
 	/* MCU Configuration--------------------------------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+
 
 	HAL_Init();
 
@@ -728,7 +874,11 @@ int main(void) {
 				if (b1 == GPIO_PIN_RESET) {
 					while (1) {
 						flag = 0;
-						Calculate_Vrms();
+						if (buffer_ready) {
+//							Calculate_Rms_Generic(&v_buf, 0.2512f);
+							Calculate_Rms_Generic(&v_buf, 0.2512f);
+							buffer_ready = 0;
+						}
 						digits[8] = 40;
 						b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
 						if (b2 == GPIO_PIN_RESET) {
@@ -742,11 +892,16 @@ int main(void) {
 
 				while (1) {
 
-					Calculate_Irms();
-					digits[8] = 42;
-					b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
-					if (b2 == GPIO_PIN_RESET) {
-						flag = 0;
+					if (buffer_ready) {
+						Calculate_Rms_Generic(&i_buf, 4.56f);
+//						Calculate_Rms_Generic(&i_buf, 1.0f);
+						buffer_ready = 0;
+					}
+					digits[8] = 41;
+					b1 = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+//					HAL_Delay(100);
+					if (b1 == GPIO_PIN_RESET) {
+						flag = 2;
 						break;
 					}
 				}
@@ -757,6 +912,7 @@ int main(void) {
 				while (1) {
 
 					Compute_PF_FromBuffers();
+					digits[8] = 42;
 					b2 = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
 					if (b2 == GPIO_PIN_RESET) {
 						flag = 0;
